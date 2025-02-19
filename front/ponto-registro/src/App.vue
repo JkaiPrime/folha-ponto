@@ -1,15 +1,14 @@
 <template>
   <div class="container">
-    <!-- Área que contém relógio e card de registro -->
+
     <div class="content-wrapper">
       <!-- Relógio grande à esquerda -->
       <div class="clock-container">
         <p class="clock">{{ horaAtual }}</p>
       </div>
 
-      <!-- Card de registro à direita -->
       <div class="card">
-        <img src="@/assets/logo.png" alt="Logo" class="logo" />
+        <img src="@/assets/logo.svg" srcset="@/assets/logo.svg" alt="Logo" class="logo" />
         <h1>Registro de Ponto</h1>
 
         <input
@@ -41,17 +40,17 @@ export default {
     const horaAtual = ref("");
 
     const validarInput = () => {
-      // Permite somente dígitos e limita a 5 caracteres
       codigo.value = codigo.value.replace(/\D/g, "").slice(0, 5);
     };
 
     const enviarCodigo = () => {
+      //Após a conclusão do back, colocar a req para a api do back
       alert(`Código ${codigo.value} enviado!`);
       codigo.value = "";
     };
 
     const atualizarHora = () => {
-      const opcoes = { timeZone: "America/Sao_Paulo", hour12: true };
+      const opcoes = { timeZone: "America/Sao_Paulo", hour12: false };
       horaAtual.value = new Date().toLocaleTimeString("pt-BR", opcoes);
     };
 
@@ -71,7 +70,7 @@ export default {
 </script>
 
 <style>
-/* Reset + Fonte */
+
 body {
   margin: 0;
   padding: 0;
@@ -84,7 +83,7 @@ body {
   height: 100vh;
 }
 
-/* Container principal para centralizar */
+
 .container {
   width: 100%;
   max-width: 1200px;
@@ -94,20 +93,20 @@ body {
   box-sizing: border-box;
 }
 
-/* Wrapper que agrupa relógio e card dentro de um bloco branco */
+
 .content-wrapper {
   display: flex;
   width: 100%;
-  background: #fff;
+  background:rgb(255, 255, 255);
   border-radius: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   padding: 40px;
   justify-content: space-between;
   align-items: center;
   box-sizing: border-box;
+  /*box-shadow: 0 0 10px 2px black;*/ 
+  border: 3px solid black;
 }
 
-/* Relógio */
 .clock-container {
   flex: 1;
   text-align: left;
@@ -117,17 +116,20 @@ body {
 .clock {
   font-size: 60px;
   font-weight: bold;
-  color: #004aad; /* Fica legal puxar pro azul escuro do gradiente */
+  color:rgb(0, 5, 10);
   margin: 0;
 }
 
-/* Card interno (formulário) */
+
 .card {
   flex: 1;
   max-width: 400px;
   text-align: center;
   padding: 20px;
   box-sizing: border-box;
+  background: #fff;  
+  border-radius: 10px;
+  box-shadow: 0 0 10px 2px black; 
 }
 
 .logo {
@@ -138,10 +140,10 @@ body {
 h1 {
   font-size: 22px;
   margin-bottom: 20px;
-  color: #004aad;
+  color:rgb(0, 0, 0);
 }
 
-/* Input */
+
 .input {
   width: 100%;
   padding: 12px;
@@ -159,7 +161,7 @@ h1 {
   border-color: #007bff;
 }
 
-/* Botão */
+
 .button {
   width: 100%;
   padding: 12px;
