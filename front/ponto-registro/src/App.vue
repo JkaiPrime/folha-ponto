@@ -1,6 +1,7 @@
 <template>
   <div class="container">
-    <div class="card-outer">
+    <!-- Área que contém relógio e card de registro -->
+    <div class="content-wrapper">
       <!-- Relógio grande à esquerda -->
       <div class="clock-container">
         <p class="clock">{{ horaAtual }}</p>
@@ -40,6 +41,7 @@ export default {
     const horaAtual = ref("");
 
     const validarInput = () => {
+      // Permite somente dígitos e limita a 5 caracteres
       codigo.value = codigo.value.replace(/\D/g, "").slice(0, 5);
     };
 
@@ -69,61 +71,63 @@ export default {
 </script>
 
 <style>
-/* Reset */
+/* Reset + Fonte */
 body {
-  font-family: Arial, sans-serif;
-  background-color: white;
   margin: 0;
   padding: 0;
+  font-family: Arial, sans-serif;
+  /* Gradiente no corpo inteiro */
+  background: linear-gradient(135deg, #004aad, #007bff);
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
 }
 
-/* Centralização */
+/* Container principal para centralizar */
 .container {
+  width: 100%;
+  max-width: 1200px;
   display: flex;
   justify-content: center;
-  align-items: center;
-  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
-/* Layout principal (relógio e card lado a lado) */
-.card-outer {
-  background: #007bff;
-  padding: 40px;
-  border-radius: 20px;
-  width: 70vw;
-  max-width: 5000px;
+/* Wrapper que agrupa relógio e card dentro de um bloco branco */
+.content-wrapper {
   display: flex;
-  align-items: center;
+  width: 100%;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  padding: 40px;
   justify-content: space-between;
-  box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.2);
+  align-items: center;
+  box-sizing: border-box;
 }
-
 
 /* Relógio */
 .clock-container {
   flex: 1;
   text-align: left;
-  padding-right: 20px;
+  margin-right: 40px;
 }
 
 .clock {
-  font-size: 50px;
+  font-size: 60px;
   font-weight: bold;
-  color: white;
+  color: #004aad; /* Fica legal puxar pro azul escuro do gradiente */
+  margin: 0;
 }
 
-/* Card Interno */
+/* Card interno (formulário) */
 .card {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  text-align: center;
-  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
   flex: 1;
+  max-width: 400px;
+  text-align: center;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .logo {
@@ -134,35 +138,43 @@ body {
 h1 {
   font-size: 22px;
   margin-bottom: 20px;
+  color: #004aad;
 }
 
 /* Input */
 .input {
-  width: calc(100% - 20px);
-  padding: 10px;
+  width: 100%;
+  padding: 12px;
   font-size: 18px;
   text-align: center;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  margin-bottom: 10px;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  margin-bottom: 15px;
   box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.input:focus {
+  border-color: #007bff;
 }
 
 /* Botão */
 .button {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   font-size: 18px;
   background-color: #007bff;
-  color: white;
+  color: #fff;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: 0.3s;
+  transition: background-color 0.3s;
+  font-weight: bold;
 }
 
 .button:hover {
-  background-color: #0056b3;
+  background-color: #005bb5;
 }
 
 .button:disabled {
@@ -172,16 +184,14 @@ h1 {
 
 /* Responsividade */
 @media (max-width: 700px) {
-  .card-outer {
+  .content-wrapper {
     flex-direction: column;
-    align-items: center;
-    width: 90%;
     padding: 20px;
   }
 
   .clock-container {
     text-align: center;
-    padding-right: 0;
+    margin-right: 0;
     margin-bottom: 20px;
   }
 
