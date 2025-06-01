@@ -1,0 +1,45 @@
+name: 🧪 Backend CI
+
+on:
+  push:
+    paths:
+      - 'back/***'
+  pull_request:
+    paths:
+      - 'back/**'
+
+defaults:
+  run:
+    working-directory: back
+
+jobs:
+  backend-checks:
+    name: ⚙️ Backend Python Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⚙️ Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'  # ou 3.10, conforme sua stack
+
+      - name: 📦 Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: 📦 Install Dependencies
+        run: poetry install
+
+      - name: 🧼 Run Black
+        run: poetry run black . --check
+
+      - name: 🔍 Run Flake8
+        run: poetry run flake8 src
+
+      - name: 📥 Run isort
+        run: poetry run isort . --check-only
+
