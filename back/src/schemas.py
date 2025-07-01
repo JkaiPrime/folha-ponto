@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import date, datetime
 from typing import Optional
 
+
 # — Colaborador: código de 6 dígitos numéricos —
 class ColaboradorBase(BaseModel):
     code: str = Field(
@@ -12,13 +13,17 @@ class ColaboradorBase(BaseModel):
     )
     nome: Optional[str] = None
 
+class ColaboradorResponse(BaseModel):
+    id: int
+    nome: str
+    code: str
+
+    class Config:
+        orm_mode = True
+
 class ColaboradorCreate(ColaboradorBase):
     pass
 
-class ColaboradorResponse(ColaboradorBase):
-    id: int
-    class Config:
-        orm_mode = True
 
 # — Registro de Ponto —
 class RegistroPontoBase(BaseModel):
@@ -45,6 +50,8 @@ class RegistroPontoResponse(RegistroPontoBase):
     saida_almoco: Optional[datetime] = None
     volta_almoco: Optional[datetime] = None
     saida: Optional[datetime] = None
+    colaborador: Optional[ColaboradorResponse] = None  # ADICIONADO
+
     class Config:
         orm_mode = True
 

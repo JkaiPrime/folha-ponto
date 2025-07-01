@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 from . import models, schemas
 
@@ -77,7 +78,7 @@ def registrar_ponto(db: Session, colaborador_id: str):
     return reg
 
 def list_pontos(db: Session):
-    return db.query(models.RegistroPonto).all()
+    return db.query(models.RegistroPonto).options(joinedload(models.RegistroPonto.colaborador)).all()
 
 def update_ponto(db: Session, id: int, dados: schemas.RegistroPontoUpdate):
     reg = db.query(models.RegistroPonto).filter_by(id=id).first()
