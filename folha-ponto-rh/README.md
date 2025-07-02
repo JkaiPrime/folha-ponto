@@ -7,6 +7,8 @@ Sistema de folha ponto
 yarn
 # or
 npm install
+# or
+pnpm install
 ```
 
 ### Start the app in development mode (hot-code reloading, error reporting, etc.)
