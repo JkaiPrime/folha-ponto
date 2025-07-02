@@ -3,7 +3,7 @@
     <q-card class="q-pa-lg login-card">
       <q-card-section class="text-center">
         <q-img
-          src="https://upload.wikimedia.org/wikipedia/commons/a/a7/React-icon.svg"
+          src="src\assets\logo.svg"
           style="width: 80px; margin-bottom: 20px;"
           spinner-color="white"
         />
