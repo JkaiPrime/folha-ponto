@@ -80,18 +80,20 @@ const columns: QTableColumn<RegistroPonto>[] = [
   { name: 'saida', label: 'Saída', field: row => formatTime(row.saida), align: 'center' }
 ];
 
-function formatDate(dateStr: string | undefined): string {
-  if (!dateStr) return '—';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('pt-BR');
+function formatDate(iso: unknown): string {
+  if (typeof iso !== 'string') return '-';
+  const [ano, mes, dia] = (iso.split('T')[0]?.split('-') ?? []);
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : '-';
 }
 
-function formatTime(dateStr: string | undefined): string {
-  if (!dateStr) return '—';
-  const date = new Date(dateStr);
+function formatTime(iso: string | null | undefined) {
+  if (!iso) return '-';
+  const date = new Date(iso); // isso interpreta o horário como UTC (e pode ajustar)
   return date.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'America/Sao_Paulo'
   });
 }
 

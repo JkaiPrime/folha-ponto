@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
+from src.utils.timezone import now_sp
 
 from . import models, schemas
 
@@ -54,28 +55,41 @@ def list_colaboradores(db: Session):
 
 # —— Registro de Ponto —— #
 def registrar_ponto(db: Session, colaborador_id: str):
-    hoje = datetime.utcnow().date()
+    # Verifica se o colaborador existe
+    colaborador = db.query(models.Colaborador).filter_by(code=colaborador_id).first()
+    if not colaborador:
+        raise HTTPException(
+            status_code=404,
+            detail="Colaborador não encontrado"
+        )
+
+    agora = now_sp()
+    hoje = agora.date()
+
     reg = db.query(models.RegistroPonto).filter(
         models.RegistroPonto.colaborador_id == colaborador_id,
         models.RegistroPonto.data == hoje
     ).first()
+
     if not reg:
         reg = models.RegistroPonto(
             colaborador_id=colaborador_id,
             data=hoje,
-            entrada=datetime.utcnow()
+            entrada=agora
         )
         db.add(reg)
     else:
         if not reg.saida_almoco:
-            reg.saida_almoco = datetime.utcnow()
+            reg.saida_almoco = agora
         elif not reg.volta_almoco:
-            reg.volta_almoco = datetime.utcnow()
+            reg.volta_almoco = agora
         elif not reg.saida:
-            reg.saida = datetime.utcnow()
+            reg.saida = agora
+
     db.commit()
     db.refresh(reg)
     return reg
+
 
 def list_pontos(db: Session):
     return db.query(models.RegistroPonto).options(joinedload(models.RegistroPonto.colaborador)).all()
