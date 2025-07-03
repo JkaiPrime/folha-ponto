@@ -41,6 +41,10 @@
           <q-item-section>Visualizar pontos</q-item-section>
         </q-item>
 
+        <q-item clickable @click="irPara('/editar')">
+          <q-item-section avatar><q-icon name="edit" /></q-item-section>
+          <q-item-section>Editar pontos</q-item-section>
+        </q-item>
       </q-list>
     </q-drawer>
 

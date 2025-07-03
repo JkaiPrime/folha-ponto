@@ -5,9 +5,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-
+from src import models
 from src import crud, schemas
 from src.database import SessionLocal
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -46,14 +47,56 @@ def create_access_token(data: dict, expires: timedelta | None = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+
+
+def verifica_token_acesso(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Token inválido ou ausente",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = crud.get_user(db, email)
+    if not user:
+        raise credentials_exception
+
+    return user
+
+
+
+def verifica_token_condicional(
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(verifica_token_acesso)
+):
+    # Se já existe algum usuário no banco, exigir token
+    if db.query(models.Usuario).first():
+        return usuario
+    # Caso contrário, permitir seguir sem token
+    return None
+
+
+
 @router.post(
     "/signup",
     response_model=schemas.UserResponse,
     status_code=status.HTTP_201_CREATED
 )
-def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    created = crud.create_user(db, user)
-    return created
+def signup(
+    user: schemas.UserCreate,
+    db: Session = Depends(get_db),
+    token: dict = Depends(verifica_token_condicional)  # 🔐 Verifica token só se necessário
+):
+    return crud.create_user(db, user)
 
 @router.post("/login", response_model=schemas.Token)
 def login(
@@ -86,3 +129,6 @@ async def get_current_user(
     if not user:
         raise credentials_exception
     return user
+
+
+
