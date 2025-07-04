@@ -4,7 +4,7 @@ Este projeto é um sistema completo de controle de ponto desenvolvido com **Fast
 
 ## 🔧 Tecnologias Utilizadas
 
-- **Backend:** FastAPI + SQLAlchemy + SQLite/PostgreSQL
+- **Backend:** FastAPI + SQLAlchemy + SQLite
 - **Frontend RH:** Vue.js + Quasar Framework
 - **Autenticação:** JWT com proteção contra brute-force (bloqueio após tentativas falhas)
 
