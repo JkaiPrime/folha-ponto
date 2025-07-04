@@ -9,7 +9,9 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
+    nome = Column(String, nullable=False)  # <-- NOVO
     hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
     failed_attempts = Column(Integer, default=0, nullable=False)
     locked = Column(Boolean, default=False, nullable=False)
     locked_until = Column(DateTime, nullable=True)

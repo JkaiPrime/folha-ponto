@@ -7,11 +7,10 @@
           dense
           round
           icon="menu"
+          aria-label="Abrir menu lateral"
           @click="drawer = !drawer"
         />
-        <q-toolbar-title>
-          RH - Painel de Controle
-        </q-toolbar-title>
+        <q-toolbar-title>RH - Painel de Controle</q-toolbar-title>
       </q-toolbar>
     </q-header>
 
@@ -22,28 +21,43 @@
       bordered
     >
       <q-list padding>
-
         <q-item-label header class="text-grey-8 text-uppercase">
           Navegação
         </q-item-label>
 
         <q-item clickable v-ripple @click="irPara('/dashboard')">
-          <q-item-section avatar>
-            <q-icon name="dashboard" />
-          </q-item-section>
+          <q-item-section avatar><q-icon name="dashboard" /></q-item-section>
           <q-item-section>Dashboard</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple @click="irPara('/visualizar')">
-          <q-item-section avatar>
-            <q-icon name="visibility" />
-          </q-item-section>
+          <q-item-section avatar><q-icon name="visibility" /></q-item-section>
           <q-item-section>Visualizar pontos</q-item-section>
         </q-item>
 
-        <q-item clickable @click="irPara('/editar')">
-          <q-item-section avatar><q-icon name="edit" /></q-item-section>
+        <q-item clickable v-ripple @click="irPara('/editar')">
+          <q-item-section avatar><q-icon name="edit_square" /></q-item-section>
           <q-item-section>Editar pontos</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple @click="irPara('/excluir')">
+          <q-item-section avatar><q-icon name="delete_forever" /></q-item-section>
+          <q-item-section>Excluir pontos</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple @click="irPara('/cadastrar-colaborador')">
+          <q-item-section avatar><q-icon name="person_add_alt_1" /></q-item-section>
+          <q-item-section>Criar colaborador</q-item-section>
+        </q-item>
+
+        <q-item clickable @click="irPara('/criar-acesso')">
+          <q-item-section avatar><q-icon name="person_add" /></q-item-section>
+          <q-item-section>Gerenciamento do Acesso RH</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple @click="irPara('/listar-colaboradores')">
+          <q-item-section avatar><q-icon name="group" /></q-item-section>
+          <q-item-section>Gerenciar colaboradores</q-item-section>
         </q-item>
       </q-list>
     </q-drawer>
@@ -62,7 +76,7 @@ const drawer = ref(false);
 const router = useRouter();
 const route = useRoute();
 
-const mostrarMenu = computed(() => route.path !== '/');
+const mostrarMenu = computed<boolean>(() => route.path !== '/');
 
 function irPara(path: string) {
   drawer.value = false;

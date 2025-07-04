@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date
 
+from src import models
 from src import crud, schemas
 from src.database import SessionLocal
-from src.routers.auth import get_current_user
+from src.routers.auth import get_current_user, verifica_token_acesso
+
 
 router = APIRouter(prefix="/pontos", tags=["pontos"])
 
@@ -49,6 +51,13 @@ def update_ponto(
     _: schemas.UserResponse = Depends(get_current_user)
 ):
     return crud.update_ponto(db, id, dados)
+
+
+@router.get("/hoje", response_model=list[schemas.RegistroPontoResponse], dependencies=[Depends(verifica_token_acesso)])
+def listar_pontos_hoje(db: Session = Depends(get_db)):
+    hoje = date.today()
+    registros = db.query(models.RegistroPonto).filter(models.RegistroPonto.data == hoje).all()
+    return registros
 
 @router.delete(
     "/{id}",

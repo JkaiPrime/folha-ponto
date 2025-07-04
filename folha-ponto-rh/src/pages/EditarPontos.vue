@@ -155,6 +155,8 @@ async function buscarPontos() {
     }));
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar pontos do colaborador' });
+    registros.value = []
+    colaboradorSelecionado.value = null
   }
 }
 

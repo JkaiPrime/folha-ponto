@@ -55,14 +55,6 @@ const router = useRouter();
 
 async function handleLogin() {
   try {
-    Notify.create({
-      type: 'info',
-      message: 'Iniciando o login...',
-      position: 'top',
-      timeout: 1000,
-      group: false
-    });
-
     await auth.login(email.value, password.value);
 
     Notify.create({

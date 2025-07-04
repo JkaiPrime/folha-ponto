@@ -11,8 +11,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="API de Ponto 🕒 com Auth e Gestão")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:9000",
-                   "http://localhost:9001"],
+    allow_origins=["*"],  # ⚠️ apenas em dev!
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

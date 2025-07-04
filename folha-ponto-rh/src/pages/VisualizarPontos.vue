@@ -20,13 +20,20 @@
           dense
           class="q-mb-md"
         />
-
-        <q-btn
-          label="Buscar pontos"
-          color="primary"
-          @click="buscarPontos"
-          :disable="!colaboradorSelecionado"
-        />
+        <div class="row q-gutter-sm">
+          <q-btn
+            label="Buscar pontos"
+            color="primary"
+            @click="buscarPontos"
+            :disable="!colaboradorSelecionado"
+          />
+          <q-btn
+            label="Exportar para Excel"
+            color="secondary"
+            @click="exportarExcel"
+            :disable="registros.length === 0"
+          />
+        </div>
       </q-card-section>
 
       <q-separator />
@@ -50,6 +57,7 @@ import { ref, onMounted } from 'vue';
 import { Notify } from 'quasar';
 import { api } from 'boot/axios';
 import { useAuthStore } from 'src/stores/auth';
+import * as XLSX from 'xlsx';
 import type { QTableColumn } from 'quasar';
 
 interface RegistroPonto {
@@ -86,9 +94,9 @@ function formatDate(iso: unknown): string {
   return ano && mes && dia ? `${dia}/${mes}/${ano}` : '-';
 }
 
-function formatTime(iso: string | null | undefined) {
+function formatTime(iso: string | null | undefined): string {
   if (!iso) return '-';
-  const date = new Date(iso); // isso interpreta o horário como UTC (e pode ajustar)
+  const date = new Date(iso);
   return date.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -122,9 +130,29 @@ async function buscarPontos() {
   } catch {
     Notify.create({
       type: 'negative',
-      message: 'Erro ao buscar pontos do colaborador'
+      message: 'Colaborador não possui nenhum registro'
     });
+    registros.value = [];
+    colaboradorSelecionado.value = null
   }
+}
+
+function exportarExcel() {
+  const dados = registros.value.map(reg => ({
+    Data: formatDate(reg.data),
+    Entrada: formatTime(reg.entrada),
+    'Saída Almoço': formatTime(reg.saida_almoco),
+    'Volta Almoço': formatTime(reg.volta_almoco),
+    Saída: formatTime(reg.saida),
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(dados);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Pontos');
+
+  const colaborador = colaboradores.value.find(c => c.code === colaboradorSelecionado.value);
+  const nomeArquivo = colaborador ? colaborador.nome.replace(/\s+/g, '_') : colaboradorSelecionado.value;
+  XLSX.writeFile(wb, `pontos_${nomeArquivo}.xlsx`);
 }
 
 onMounted(carregarColaboradores);

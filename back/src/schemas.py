@@ -24,6 +24,20 @@ class ColaboradorResponse(BaseModel):
 class ColaboradorCreate(ColaboradorBase):
     pass
 
+class UserBase(BaseModel):
+    email: EmailStr
+    nome: str
+
+class UserCreate(UserBase):
+    password: str
+
+class UserResponse(UserBase):
+    id: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
 
 # — Registro de Ponto —
 class RegistroPontoBase(BaseModel):
@@ -55,15 +69,6 @@ class RegistroPontoResponse(RegistroPontoBase):
     class Config:
         orm_mode = True
 
-# — Auth / User (RH) —
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-
-class UserResponse(BaseModel):
-    email: EmailStr
-    class Config:
-        orm_mode = True
 
 class Token(BaseModel):
     access_token: str

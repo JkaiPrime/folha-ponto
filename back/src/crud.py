@@ -17,8 +17,12 @@ def get_user(db: Session, email: str):
 def create_user(db: Session, user: schemas.UserCreate):
     if get_user(db, user.email):
         raise HTTPException(status_code=400, detail="E-mail já cadastrado")
-    hashed = pwd_context.hash(user.password)
-    db_user = models.User(email=user.email, hashed_password=hashed)
+    hashed_password = pwd_context.hash(user.password)
+    db_user = models.User(
+        email=user.email,
+        nome=user.nome,  # <-- NOVO
+        hashed_password=hashed_password
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -52,6 +56,14 @@ def create_colaborador(db: Session, colab: schemas.ColaboradorCreate):
 
 def list_colaboradores(db: Session):
     return db.query(models.Colaborador).all()
+
+def delete_colaborador(db: Session, colaborador_id: str) -> bool:
+    colaborador = db.query(models.Colaborador).filter(models.Colaborador.code == colaborador_id).first()
+    if colaborador:
+        db.delete(colaborador)
+        db.commit()
+        return True
+    return False
 
 # —— Registro de Ponto —— #
 def registrar_ponto(db: Session, colaborador_id: str):

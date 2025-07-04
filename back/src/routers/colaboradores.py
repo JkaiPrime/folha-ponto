@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from src import crud, schemas
@@ -28,3 +28,13 @@ def list_colaboradores(
     _: schemas.UserResponse = Depends(get_current_user)
 ):
     return crud.list_colaboradores(db)
+
+@router.delete("/{colaborador_id}", status_code=204)
+def delete_colaborador(
+    colaborador_id: str,
+    db: Session = Depends(get_db),
+    _: schemas.UserResponse = Depends(get_current_user)
+):
+    success = crud.delete_colaborador(db, colaborador_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")

@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -79,22 +80,18 @@ def verifica_token_condicional(
     usuario: dict = Depends(verifica_token_acesso)
 ):
     # Se já existe algum usuário no banco, exigir token
-    if db.query(models.Usuario).first():
+    if db.query(models.User).first():
         return usuario
     # Caso contrário, permitir seguir sem token
     return None
 
 
 
-@router.post(
-    "/signup",
-    response_model=schemas.UserResponse,
-    status_code=status.HTTP_201_CREATED
-)
+@router.post("/signup", response_model=schemas.UserResponse, status_code=201)
 def signup(
     user: schemas.UserCreate,
     db: Session = Depends(get_db),
-    token: dict = Depends(verifica_token_condicional)  # 🔐 Verifica token só se necessário
+    token: dict = Depends(verifica_token_condicional)
 ):
     return crud.create_user(db, user)
 
@@ -130,5 +127,22 @@ async def get_current_user(
         raise credentials_exception
     return user
 
+@router.get("/usuarios", response_model=List[schemas.UserResponse])
+def listar_usuarios(
+    db: Session = Depends(get_db),
+    _: schemas.UserResponse = Depends(get_current_user)
+):
+    return db.query(models.User).all()
 
 
+@router.delete("/usuarios/{id}", status_code=204)
+def deletar_usuario(
+    id: int,
+    db: Session = Depends(get_db),
+    _: schemas.UserResponse = Depends(get_current_user)
+):
+    usuario = db.query(models.User).filter(models.User.id == id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    db.delete(usuario)
+    db.commit()

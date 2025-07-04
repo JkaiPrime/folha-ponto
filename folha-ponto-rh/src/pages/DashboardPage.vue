@@ -14,32 +14,21 @@
         flat
         bordered
         class="q-mt-md"
-        :loading="loading"
       />
     </q-card>
   </q-page>
 </template>
 
+
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { Notify } from 'quasar';
-import { useAuthStore } from 'src/stores/auth';
-import { useRouter } from 'vue-router';
 import { api } from 'boot/axios';
+import { useAuthStore } from 'src/stores/auth';
+import { Notify } from 'quasar';
 import type { QTableColumn } from 'quasar';
 
-
-const auth = useAuthStore();
-const router = useRouter();
-
-
-const loading = ref(true);
-interface RegistroPonto {
+interface Registro {
   id: number;
-  colaborador_id: string;
-  colaborador?: {
-    nome?: string;
-  };
   data?: string;
   entrada?: string;
   saida_almoco?: string;
@@ -47,26 +36,26 @@ interface RegistroPonto {
   saida?: string;
 }
 
-const registros = ref<RegistroPonto[]>([]);
-const columns: QTableColumn<RegistroPonto>[] = [
-  { name: 'colaborador_id', label: 'Código', field: 'colaborador_id', align: 'left' },
-  { name: 'colaborador_nome', label: 'Nome', field: (row) => row.colaborador?.nome || '—', align: 'left' },
-  { name: 'data', label: 'Data', field: (row) => formatDate(row.data), align: 'center' },
-  { name: 'entrada', label: 'Entrada', field: (row) => formatTime(row.entrada), align: 'center' },
-  { name: 'saida_almoco', label: 'Saída Almoço', field: (row) => formatTime(row.saida_almoco), align: 'center' },
-  { name: 'volta_almoco', label: 'Volta Almoço', field: (row) => formatTime(row.volta_almoco), align: 'center' },
-  { name: 'saida', label: 'Saída', field: (row) => formatTime(row.saida), align: 'center' }
+const auth = useAuthStore();
+const registros = ref<Registro[]>([]);
+
+const columns: QTableColumn<Registro>[] = [
+  { name: 'data', label: 'Data', field: row => formatDate(row.data), align: 'center' },
+  { name: 'entrada', label: 'Entrada', field: row => formatTime(row.entrada), align: 'center' },
+  { name: 'saida_almoco', label: 'Saída Almoço', field: row => formatTime(row.saida_almoco), align: 'center' },
+  { name: 'volta_almoco', label: 'Volta Almoço', field: row => formatTime(row.volta_almoco), align: 'center' },
+  { name: 'saida', label: 'Saída', field: row => formatTime(row.saida), align: 'center' }
 ];
 
-function formatDate(iso: unknown): string {
-  if (typeof iso !== 'string') return '-';
-  const [ano, mes, dia] = (iso.split('T')[0]?.split('-') ?? []);
-  return ano && mes && dia ? `${dia}/${mes}/${ano}` : '-';
+function formatDate(iso: string | undefined): string {
+  if (!iso) return '-';
+  const date = new Date(iso);
+  return date.toLocaleDateString('pt-BR');
 }
 
-function formatTime(iso: string | null | undefined) {
+function formatTime(iso: string | undefined): string {
   if (!iso) return '-';
-  const date = new Date(iso); // isso interpreta o horário como UTC (e pode ajustar)
+  const date = new Date(iso);
   return date.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -75,27 +64,29 @@ function formatTime(iso: string | null | undefined) {
   });
 }
 
-async function fetchPontos() {
-  if (!auth.token) {
-    Notify.create({ type: 'warning', message: 'Sessão expirada.', position: 'top' });
-    void router.push('/');
-    return;
-  }
-
-  loading.value = true;
+async function carregarPontos() {
   try {
-    const res = await api.get('/pontos', {
+    const res = await api.get('/pontos/hoje', {
       headers: { Authorization: `Bearer ${auth.token}` }
     });
+
+    if (res.data.length === 0) {
+      Notify.create({
+        type: 'warning',
+        message: 'Nenhum ponto foi registrado hoje.'
+      });
+    }
+
     registros.value = res.data;
-  } catch{
-    Notify.create({ type: 'negative', message: 'Erro ao carregar os pontos.' });
-  } finally {
-    loading.value = false;
+  } catch {
+    Notify.create({
+      type: 'negative',
+      message: 'Erro ao carregar pontos do dia'
+    });
   }
 }
 
-onMounted(fetchPontos);
+onMounted(carregarPontos);
 </script>
 
 <style scoped>
