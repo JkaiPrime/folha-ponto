@@ -65,15 +65,40 @@ async function handleLogin() {
     });
 
     setTimeout(() => {
-        void router.push('/dashboard');
+      void router.push('/dashboard');
     }, 1000);
-  } catch {
-    Notify.create({
-      type: 'negative',
-      message: 'Credenciais inválidas. Tente novamente.',
-      position: 'top',
-      timeout: 3000
-    });
+  } catch (err: unknown) {
+    let status = 0;
+    let detail = '';
+
+    if (
+      typeof err === 'object' &&
+      err !== null &&
+      'response' in err &&
+      typeof err.response === 'object' &&
+      err.response !== null
+    ) {
+      const res = err.response as { status?: number; data?: { detail?: string } };
+      status = res.status ?? 0;
+      detail = res.data?.detail ?? '';
+    }
+
+    if (status === 423) {
+      Notify.create({
+        type: 'warning',
+        message: 'Usuário bloqueado. Tente novamente mais tarde.',
+        position: 'top',
+        timeout: 4000
+      });
+    } else {
+      Notify.create({
+        type: 'negative',
+        message: detail || 'Credenciais inválidas. Tente novamente.',
+        position: 'top',
+        timeout: 3000
+      });
+    }
+
     email.value = '';
     password.value = '';
   }

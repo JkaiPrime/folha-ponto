@@ -11,6 +11,16 @@
           @click="drawer = !drawer"
         />
         <q-toolbar-title>RH - Painel de Controle</q-toolbar-title>
+        <q-space />
+
+        <q-btn
+          flat
+          dense
+          icon="logout"
+          label="Sair"
+          @click="logout"
+          class="q-ml-sm"
+        />
       </q-toolbar>
     </q-header>
 
@@ -81,5 +91,13 @@ const mostrarMenu = computed<boolean>(() => route.path !== '/');
 function irPara(path: string) {
   drawer.value = false;
   void router.push(path);
+}
+import { useAuthStore } from 'src/stores/auth';
+
+const auth = useAuthStore();
+
+function logout() {
+  auth.logout();
+  void router.push('/');
 }
 </script>

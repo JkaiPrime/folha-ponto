@@ -22,12 +22,20 @@
         <q-table
           :rows="usuarios"
           :columns="columns"
-          row-key="id"
+          row-key="email"
           flat
           bordered
           dense
         >
-          <template v-slot:body-cell-actions="props">
+          <template v-slot:body-cell-status="props">
+            <q-td align="center">
+              <q-badge :color="props.row.locked ? 'negative' : 'positive'" align="middle">
+                {{ props.row.locked ? 'Bloqueado' : 'Ativo' }}
+              </q-badge>
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-excluir="props">
             <q-td align="center">
               <q-btn
                 flat
@@ -36,6 +44,20 @@
                 icon="delete"
                 color="negative"
                 @click="excluirUsuario(props.row.id)"
+              />
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-desbloquear="props">
+            <q-td align="center">
+              <q-btn
+                v-if="props.row.locked"
+                flat
+                dense
+                round
+                icon="lock_open"
+                color="warning"
+                @click="desbloquearUsuario(props.row.id)"
               />
             </q-td>
           </template>
@@ -58,18 +80,19 @@ const senha = ref('');
 const usuarios = ref([]);
 const auth = useAuthStore();
 
-
 interface Usuario {
   id: number;
   nome: string;
   email: string;
+  locked: boolean;
 }
 
 const columns: QTableColumn<Usuario>[] = [
-  { name: 'id', label: 'ID', field: 'id', align: 'center' },
   { name: 'nome', label: 'Nome', field: 'nome', align: 'center' },
   { name: 'email', label: 'Email', field: 'email', align: 'center' },
-  { name: 'actions', label: 'Ações', field: () => '', align: 'center' }
+  { name: 'status', label: 'Status', field: 'locked', align: 'center' },
+  { name: 'excluir', label: 'Excluir', field: () => '', align: 'center' },
+  { name: 'desbloquear', label: 'Desbloquear', field: () => '', align: 'center' }
 ];
 
 async function carregarUsuarios() {
@@ -114,18 +137,14 @@ async function cadastrarUsuario() {
     senha.value = '';
     await carregarUsuarios();
   } catch (err: unknown) {
+    let mensagem = 'Erro ao cadastrar';
+
     if (err && typeof err === 'object' && 'response' in err) {
-    const axiosError = err as { response?: { data?: { detail?: string } } };
-    Notify.create({
-      type: 'negative',
-      message: axiosError.response?.data?.detail || 'Erro ao cadastrar'
-    });
-    } else {
-      Notify.create({
-        type: 'negative',
-        message: 'Erro desconhecido ao cadastrar'
-      });
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      mensagem = axiosErr.response?.data?.detail || mensagem;
     }
+
+    Notify.create({ type: 'negative', message: mensagem });
   }
 }
 
@@ -140,6 +159,18 @@ async function excluirUsuario(id: number) {
     await carregarUsuarios();
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao excluir usuário' });
+  }
+}
+
+async function desbloquearUsuario(id: number) {
+  try {
+    await api.post(`/auth/usuarios/${id}/desbloquear`, {}, {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    });
+    Notify.create({ type: 'positive', message: 'Usuário desbloqueado com sucesso' });
+    await carregarUsuarios();
+  } catch {
+    Notify.create({ type: 'negative', message: 'Erro ao desbloquear usuário' });
   }
 }
 

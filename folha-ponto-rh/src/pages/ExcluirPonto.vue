@@ -8,25 +8,42 @@
       <q-separator />
 
       <q-card-section>
-        <q-select
-          v-model="colaboradorSelecionado"
-          :options="colaboradores"
-          option-value="code"
-          option-label="nome"
-          emit-value
-          map-options
-          label="Selecionar colaborador"
-          filled
-          dense
-          class="q-mb-md"
-        />
+        <div class="q-gutter-md">
+          <q-select
+            v-model="colaboradorSelecionado"
+            :options="colaboradores"
+            option-value="code"
+            option-label="nome"
+            emit-value
+            map-options
+            label="Selecionar colaborador"
+            filled
+            dense
+            @update:model-value="buscarPontos"
+          />
 
-        <q-btn
-          label="Buscar pontos"
-          color="primary"
-          @click="buscarPontos"
-          :disable="!colaboradorSelecionado"
-        />
+          <q-input
+            v-model="mesSelecionado"
+            label="Selecionar mês"
+            filled
+            dense
+          >
+            <template #append>
+              <q-icon name="event" class="cursor-pointer">
+                <q-popup-proxy>
+                  <q-date
+                    v-model="mesSelecionado"
+                    mask="YYYY-MM"
+                    minimal
+                    default-view="Months"
+                    emit-immediately
+                    @update:model-value="buscarPontos"
+                  />
+                </q-popup-proxy>
+              </q-icon>
+            </template>
+          </q-input>
+        </div>
       </q-card-section>
 
       <q-separator />
@@ -81,8 +98,8 @@ interface Colaborador {
 const auth = useAuthStore();
 const colaboradores = ref<Colaborador[]>([]);
 const colaboradorSelecionado = ref<string | null>(null);
+const mesSelecionado = ref<string | null>(null);
 const registros = ref<Registro[]>([]);
-
 
 function formatDate(iso: string | undefined): string {
   if (!iso) return '-';
@@ -99,7 +116,6 @@ function formatTime(iso: string | undefined): string {
     hour12: false
   });
 }
-
 
 const columns: QTableColumn<Registro>[] = [
   { name: 'data', label: 'Data', field: row => formatDate(row.data), align: 'center' },
@@ -122,17 +138,27 @@ async function carregarColaboradores() {
 }
 
 async function buscarPontos() {
-  if (!colaboradorSelecionado.value) return;
+  if (!colaboradorSelecionado.value || !mesSelecionado.value) return;
+
+  const [ano, mes] = mesSelecionado.value.split('-');
+  const inicio = `${ano}-${mes}-01`;
+  const fim = new Date(Number(ano), Number(mes), 0).toISOString().split('T')[0];
 
   try {
-    const res = await api.get(`/pontos/${colaboradorSelecionado.value}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
+    const res = await api.get('/pontos/por-data', {
+      params: {
+        colaborador_id: colaboradorSelecionado.value,
+        inicio,
+        fim
+      },
+      headers: {
+        Authorization: `Bearer ${auth.token}`
+      }
     });
     registros.value = res.data;
   } catch {
-    Notify.create({ type: 'negative', message: 'Erro ao buscar pontos' });
-    registros.value = []
-    colaboradorSelecionado.value = null
+    Notify.create({ type: 'negative', message: 'Erro ao buscar pontos do colaborador' });
+    registros.value = [];
   }
 }
 

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import date
 
@@ -56,7 +57,28 @@ def update_ponto(
 @router.get("/hoje", response_model=list[schemas.RegistroPontoResponse], dependencies=[Depends(verifica_token_acesso)])
 def listar_pontos_hoje(db: Session = Depends(get_db)):
     hoje = date.today()
-    registros = db.query(models.RegistroPonto).filter(models.RegistroPonto.data == hoje).all()
+    registros = (
+        db.query(models.RegistroPonto)
+        .join(models.Colaborador)
+        .filter(models.RegistroPonto.data == hoje)
+        .all()
+    )
+    return registros
+
+@router.get("/por-data", response_model=List[schemas.RegistroPontoResponse])
+def listar_pontos_por_data(
+    colaborador_id: str,
+
+    inicio: date,
+    fim: date,
+    db: Session = Depends(get_db),
+    usuario: models.User = Depends(verifica_token_acesso)
+):
+    registros = db.query(models.RegistroPonto).filter(
+        models.RegistroPonto.colaborador_id == colaborador_id,
+        models.RegistroPonto.data >= inicio,
+        models.RegistroPonto.data <= fim
+    ).all()
     return registros
 
 @router.delete(
