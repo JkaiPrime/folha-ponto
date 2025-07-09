@@ -4,6 +4,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from .database import Base
+from datetime import datetime
+
 
 class User(Base):
     __tablename__ = "users"
@@ -15,6 +17,7 @@ class User(Base):
     failed_attempts = Column(Integer, default=0, nullable=False)
     locked = Column(Boolean, default=False, nullable=False)
     locked_until = Column(DateTime, nullable=True)
+    role = Column(String, default="funcionario", nullable=False)
 
 class Colaborador(Base):
     __tablename__ = "colaboradores"
@@ -38,3 +41,15 @@ class RegistroPonto(Base):
     __table_args__ = (
         UniqueConstraint("colaborador_id", "data", name="_colab_data_uc"),
     )
+
+
+
+class Justificativa(Base):
+    __tablename__ = "justificativas"
+    id = Column(Integer, primary_key=True, index=True)
+    colaborador_id = Column(String(6), ForeignKey("colaboradores.code"), index=True)
+    justificativa = Column(String, nullable=False)
+    arquivo = Column(String, nullable=True)
+    data_envio = Column(DateTime, default=datetime.utcnow)
+
+    colaborador = relationship("Colaborador", backref="justificativas")

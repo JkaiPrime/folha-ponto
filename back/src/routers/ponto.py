@@ -6,7 +6,7 @@ from datetime import date
 from src import models
 from src import crud, schemas
 from src.database import SessionLocal
-from src.routers.auth import get_current_user, verifica_token_acesso
+from src.routers.auth import apenas_funcionario, get_current_user, verifica_token_acesso
 
 
 router = APIRouter(prefix="/pontos", tags=["pontos"])
@@ -21,13 +21,15 @@ def get_db():
 @router.post(
     "/bater-ponto",
     response_model=schemas.RegistroPontoResponse,
-    summary="Bater ponto (sem autenticação)"
+    summary="Bater ponto (autenticado)"
 )
 def bater_ponto(
     ponto: schemas.RegistroPontoCreate,
     db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user)
 ):
     return crud.registrar_ponto(db, ponto.colaborador_id)
+
 
 @router.get(
     "",

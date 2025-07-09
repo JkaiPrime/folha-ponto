@@ -20,8 +20,9 @@ def create_user(db: Session, user: schemas.UserCreate):
     hashed_password = pwd_context.hash(user.password)
     db_user = models.User(
         email=user.email,
-        nome=user.nome,  # <-- NOVO
-        hashed_password=hashed_password
+        nome=user.nome,
+        hashed_password=hashed_password,
+        role = user.role
     )
     db.add(db_user)
     db.commit()
@@ -123,3 +124,16 @@ def delete_ponto(db: Session, id: int):
     db.delete(reg)
     db.commit()
     return reg
+
+
+
+def salvar_justificativa(db: Session, dados: schemas.JustificativaCreate):
+    nova = models.Justificativa(
+        colaborador_id=dados.colaborador_id,
+        justificativa=dados.justificativa,
+        arquivo=dados.arquivo
+    )
+    db.add(nova)
+    db.commit()
+    db.refresh(nova)
+    return nova

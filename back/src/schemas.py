@@ -27,6 +27,7 @@ class ColaboradorCreate(ColaboradorBase):
 class UserBase(BaseModel):
     email: EmailStr
     nome: str
+    role: str = "funcionario"
 
 class UserCreate(UserBase):
     password: str
@@ -76,3 +77,19 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+
+class JustificativaCreate(BaseModel):
+    colaborador_id: str
+    justificativa: str
+    arquivo: Optional[str] = None
+
+class JustificativaResponse(BaseModel):
+    id: int
+    colaborador_id: str
+    justificativa: str
+    arquivo: Optional[str]
+    data_envio: datetime
+
+    class Config:
+        orm_mode = True

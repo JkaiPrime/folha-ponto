@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -103,7 +103,7 @@ def login(
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
-    access_token = create_access_token(data={"sub": user.email})
+    access_token = create_access_token(data={"sub": user.email, "role": user.role})
     return {"access_token": access_token, "token_type": "bearer"}
 
 async def get_current_user(
@@ -118,6 +118,7 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
+        role: str = payload.get("role")
         if email is None:
             raise credentials_exception
     except JWTError:
@@ -135,6 +136,37 @@ def listar_usuarios(
     return db.query(models.User).all()
 
 
+
+
+def apenas_funcionario(user: models.User = Depends(get_current_user)):
+    if user.role != "funcionario":
+        raise HTTPException(status_code=403, detail="Acesso permitido apenas para funcionários")
+    return user
+
+def apenas_gestao(user: models.User = Depends(get_current_user)):
+    if user.role != "gestao":
+        raise HTTPException(status_code=403, detail="Acesso permitido apenas para gestão")
+    return user
+
+
+@router.patch("/usuarios/{id}/papel", response_model=schemas.UserResponse)
+def atualizar_papel_usuario(
+    id: int,
+    role: str = Form(...),
+    db: Session = Depends(get_db),
+    _: models.User = Depends(apenas_gestao)
+):
+    user = db.query(models.User).filter_by(id=id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    if role not in ["funcionario", "gestao"]:
+        raise HTTPException(status_code=400, detail="Papel inválido")
+
+    user.role = role
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.post("/usuarios/{user_id}/desbloquear", response_model=schemas.UserResponse)
