@@ -13,75 +13,99 @@
         row-key="id"
         flat
         bordered
-        class="q-mt-md"
-      />
+        :rows-per-page-options="[0]"
+      >
+        <template v-slot:body-cell-anexo="props">
+          <q-td :props="props">
+            <span v-html="props.value" />
+          </q-td>
+        </template>
+      </q-table>
     </q-card>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { api } from 'boot/axios';
-import { useAuthStore } from 'src/stores/auth';
-import { Notify } from 'quasar';
-import type { QTableColumn } from 'quasar';
+import { ref, onMounted } from 'vue'
+import { api } from 'boot/axios'
+import { Notify } from 'quasar'
+import dayjs from 'dayjs'
+import type { QTableColumn } from 'quasar'
 
 interface Registro {
-  id: number;
-  entrada?: string;
-  saida_almoco?: string;
-  volta_almoco?: string;
-  saida?: string;
-  colaborador?: {
-    nome: string;
-  };
-}
-
-const auth = useAuthStore();
-const registros = ref<Registro[]>([]);
-
-const columns: QTableColumn<Registro>[] = [
-  { name: 'nome', label: 'Nome', field: row => row.colaborador?.nome || '-', align: 'center' },
-  { name: 'entrada', label: 'Entrada', field: row => formatTime(row.entrada), align: 'center' },
-  { name: 'saida_almoco', label: 'Saída Almoço', field: row => formatTime(row.saida_almoco), align: 'center' },
-  { name: 'volta_almoco', label: 'Volta Almoço', field: row => formatTime(row.volta_almoco), align: 'center' },
-  { name: 'saida', label: 'Saída', field: row => formatTime(row.saida), align: 'center' }
-];
-
-function formatTime(iso: string | undefined): string {
-  if (!iso) return '-';
-  const date = new Date(iso);
-  return date.toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'America/Sao_Paulo'
-  });
-}
-
-async function carregarPontos() {
-  try {
-    const res = await api.get('/pontos/hoje', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
-
-    if (res.data.length === 0) {
-      Notify.create({
-        type: 'warning',
-        message: 'Nenhum ponto foi registrado hoje.'
-      });
-    }
-
-    registros.value = res.data;
-  } catch {
-    Notify.create({
-      type: 'negative',
-      message: 'Erro ao carregar pontos do dia'
-    });
+  id: number
+  data: string
+  entrada: string | null
+  saida_almoco: string | null
+  volta_almoco: string | null
+  saida: string | null
+  justificativa?: string
+  arquivo?: string
+  colaborador: {
+    nome: string
   }
 }
 
-onMounted(carregarPontos);
+const registros = ref<Registro[]>([])
+
+onMounted(async () => {
+  try {
+    const res = await api.get('/pontos/hoje', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    })
+    registros.value = res.data
+  } catch {
+    Notify.create({ type: 'negative', message: 'Erro ao carregar registros de hoje' })
+  }
+})
+
+function formatTime(valor: string | null | undefined): string {
+  return valor ? dayjs(valor).format('HH:mm') : '-'
+}
+
+const columns: QTableColumn<Registro>[] = [
+  {
+    name: 'nome',
+    label: 'Nome',
+    field: row => row.colaborador?.nome || '-',
+    align: 'center' as const
+  },
+  {
+    name: 'entrada',
+    label: 'Entrada',
+    field: row => formatTime(row.entrada),
+    align: 'center' as const
+  },
+  {
+    name: 'saida_almoco',
+    label: 'Saída Almoço',
+    field: row => formatTime(row.saida_almoco),
+    align: 'center' as const
+  },
+  {
+    name: 'volta_almoco',
+    label: 'Volta Almoço',
+    field: row => formatTime(row.volta_almoco),
+    align: 'center' as const
+  },
+  {
+    name: 'saida',
+    label: 'Saída',
+    field: row => formatTime(row.saida),
+    align: 'center' as const
+  },
+  {
+    name: 'anexo',
+    label: 'Anexo',
+    align: 'center',
+    field: () => '', // campo não vem direto do registro
+    format: (_val: unknown, row: Registro) => {
+      return row.arquivo
+        ? `<a href="http://localhost:8000/justificativas/arquivo/${row.arquivo}" target="_blank" download>📎</a>`
+        : ''
+    }
+  }
+]
 </script>
 
 <style scoped>

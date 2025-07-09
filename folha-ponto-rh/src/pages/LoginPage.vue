@@ -47,6 +47,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from 'src/stores/auth';
 import { Notify } from 'quasar';
+import { api } from 'boot/axios';
 
 const email = ref('');
 const password = ref('');
@@ -55,7 +56,16 @@ const router = useRouter();
 
 async function handleLogin() {
   try {
-    await auth.login(email.value, password.value);
+    const data = new URLSearchParams()
+    data.append('username', email.value)
+    data.append('password', password.value)
+
+    const res = await api.post('/auth/login', data, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    })
+    await auth.login(res.data.access_token)
 
     Notify.create({
       type: 'positive',
@@ -65,7 +75,11 @@ async function handleLogin() {
     });
 
     setTimeout(() => {
-      void router.push('/dashboard');
+      if (auth.role === 'gestao') {
+        void router.push('/dashboard')
+      } else {
+        void router.push('/bater-ponto')
+      }
     }, 1000);
   } catch (err: unknown) {
     let status = 0;

@@ -20,9 +20,24 @@ class ColaboradorResponse(BaseModel):
 
     class Config:
         orm_mode = True
+        
+        
+class RegistroComColaboradorResponse(BaseModel):
+    id: Optional[int]
+    data: date
+    entrada: Optional[datetime]
+    saida_almoco: Optional[datetime]
+    volta_almoco: Optional[datetime]
+    saida: Optional[datetime]
+    justificativa: Optional[str] = None
+    arquivo: Optional[str] = None
+    colaborador: Optional[ColaboradorResponse] = None
+
+    class Config:
+        orm_mode = True
 
 class ColaboradorCreate(ColaboradorBase):
-    pass
+    email_usuario: Optional[EmailStr] = None
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -58,14 +73,15 @@ class RegistroPontoUpdate(BaseModel):
     volta_almoco: Optional[datetime] = None
     saida: Optional[datetime] = None
 
-class RegistroPontoResponse(RegistroPontoBase):
-    id: int
+class RegistroPontoResponse(BaseModel):
+    id: Optional[int]
     data: date
-    entrada: Optional[datetime] = None
-    saida_almoco: Optional[datetime] = None
-    volta_almoco: Optional[datetime] = None
-    saida: Optional[datetime] = None
-    colaborador: Optional[ColaboradorResponse] = None  # ADICIONADO
+    entrada: Optional[datetime]
+    saida_almoco: Optional[datetime]
+    volta_almoco: Optional[datetime]
+    saida: Optional[datetime]
+    justificativa: Optional[str] = None
+    arquivo: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -82,7 +98,9 @@ class TokenData(BaseModel):
 class JustificativaCreate(BaseModel):
     colaborador_id: str
     justificativa: str
+    data_referente: date
     arquivo: Optional[str] = None
+
 
 class JustificativaResponse(BaseModel):
     id: int

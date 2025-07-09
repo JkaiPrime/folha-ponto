@@ -24,6 +24,8 @@ class Colaborador(Base):
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(6), unique=True, index=True, nullable=False)
     nome = Column(String, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    usuario = relationship("User")
     registros = relationship("RegistroPonto", back_populates="colaborador")
 
 class RegistroPonto(Base):
@@ -51,5 +53,5 @@ class Justificativa(Base):
     justificativa = Column(String, nullable=False)
     arquivo = Column(String, nullable=True)
     data_envio = Column(DateTime, default=datetime.utcnow)
-
+    data_referente = Column(Date, nullable=False)
     colaborador = relationship("Colaborador", backref="justificativas")

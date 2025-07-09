@@ -10,7 +10,7 @@ import {
 import routes from './routes';
 import { useAuthStore } from 'src/stores/auth';
 
-let routerInstance: ReturnType<typeof createRouter>; // ✅ exportável
+let routerInstance: ReturnType<typeof createRouter>;
 
 export default defineRouter(function () {
   const createHistory = process.env.SERVER
@@ -28,6 +28,7 @@ export default defineRouter(function () {
   routerInstance.beforeEach((to, from, next) => {
     const auth = useAuthStore();
 
+    // Redirecionamento da página de login
     if (to.path === '/') {
       if (auth.token) {
         next('/dashboard');
@@ -38,16 +39,16 @@ export default defineRouter(function () {
       }
     }
 
-    if (
-      to.path.startsWith('/dashboard') ||
-      to.path.startsWith('/editar') ||
-      to.path.startsWith('/visualizar') ||
-      to.path.startsWith('/excluir')
-    ) {
-      if (!auth.token) {
-        next('/');
-        return;
-      }
+    // Bloqueio de rotas que requerem autenticação
+    if (to.meta.requiresAuth && !auth.token) {
+      next('/');
+      return;
+    }
+
+    // Bloqueio por papel (gestao ou funcionario)
+    if (to.meta.role && auth.role !== to.meta.role) {
+      next('/acesso-negado'); // Crie essa página para 403 ou use /bater-ponto
+      return;
     }
 
     next();
@@ -56,4 +57,4 @@ export default defineRouter(function () {
   return routerInstance;
 });
 
-export { routerInstance as Router }; // ✅ exporta o router corretamente
+export { routerInstance as Router };

@@ -34,41 +34,56 @@
         <q-item-label header class="text-grey-8 text-uppercase">
           Navegação
         </q-item-label>
+        <q-item clickable v-ripple @click="irPara('/bater-ponto')">
+          <q-item-section avatar><q-icon name="punch_clock" /></q-item-section>
+          <q-item-section>Bater Ponto</q-item-section>
+        </q-item>
 
-        <q-item clickable v-ripple @click="irPara('/dashboard')">
-          <q-item-section avatar><q-icon name="dashboard" /></q-item-section>
+        <q-item clickable v-ripple @click="irPara('/justificativas')">
+          <q-item-section avatar><q-icon name="fact_check" /></q-item-section>
+          <q-item-section>Justificativas</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple @click="irPara('/meus-pontos')">
+          <q-item-section avatar><q-icon name="fact_check" /></q-item-section>
+          <q-item-section>Meus pontos</q-item-section>
+        </q-item>
+
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/dashboard')">
+          <q-item-section avatar><q-icon name="analytics" /></q-item-section>
           <q-item-section>Dashboard</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple @click="irPara('/visualizar')">
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/visualizar')">
           <q-item-section avatar><q-icon name="visibility" /></q-item-section>
           <q-item-section>Visualizar pontos</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple @click="irPara('/editar')">
-          <q-item-section avatar><q-icon name="edit_square" /></q-item-section>
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/editar')">
+          <q-item-section avatar><q-icon name="edit" /></q-item-section>
           <q-item-section>Editar pontos</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple @click="irPara('/excluir')">
-          <q-item-section avatar><q-icon name="delete_forever" /></q-item-section>
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/excluir')">
+          <q-item-section avatar><q-icon name="delete" /></q-item-section>
           <q-item-section>Excluir pontos</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple @click="irPara('/cadastrar-colaborador')">
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/cadastrar-colaborador')">
           <q-item-section avatar><q-icon name="person_add_alt_1" /></q-item-section>
           <q-item-section>Criar colaborador</q-item-section>
         </q-item>
 
-        <q-item clickable @click="irPara('/criar-acesso')">
-          <q-item-section avatar><q-icon name="person_add" /></q-item-section>
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/criar-acesso')">
+          <q-item-section avatar><q-icon name="admin_panel_settings" /></q-item-section>
           <q-item-section>Gerenciamento do Acesso RH</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple @click="irPara('/listar-colaboradores')">
-          <q-item-section avatar><q-icon name="group" /></q-item-section>
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/listar-colaboradores')">
+          <q-item-section avatar><q-icon name="groups" /></q-item-section>
           <q-item-section>Gerenciar colaboradores</q-item-section>
         </q-item>
+
       </q-list>
     </q-drawer>
 

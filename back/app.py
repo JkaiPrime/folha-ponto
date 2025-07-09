@@ -3,7 +3,7 @@ from src.database import engine, Base
 from src.routers.auth import router as auth_router
 from src.routers.colaboradores import router as colaboradores_router
 from src.routers.ponto import router as ponto_router
-from src.routers import justificativas
+from src.routers import justificativas, me
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -26,6 +26,7 @@ app.include_router(auth_router)
 app.include_router(colaboradores_router)
 app.include_router(ponto_router)
 app.include_router(justificativas.router)
+app.include_router(me.router)
 
 @app.get("/")
 async def root():

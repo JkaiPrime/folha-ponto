@@ -7,7 +7,7 @@
       <q-card-section>
         <q-input v-model="nome" label="Nome" filled dense class="q-mb-sm" />
         <q-input v-model="email" label="Email" type="email" filled dense class="q-mb-sm" />
-        <q-input v-model="senha" label="Senha" type="password" filled dense class="q-mb-md" />
+        <q-input v-model="senha" label="Senha" type="password" filled dense class="q-mb-sm" />
         <q-select
           v-model="papel"
           :options="['funcionario', 'gestao']"
@@ -35,6 +35,46 @@
           bordered
           dense
         >
+          <template v-slot:body-cell-role="props">
+            <q-td align="center">
+              <q-icon
+                :name="props.row.role === 'gestao' ? 'admin_panel_settings' : 'person'"
+                :color="props.row.role === 'gestao' ? 'indigo' : 'primary'"
+              >
+                <q-tooltip>
+                  {{ props.row.role === 'gestao' ? 'Gestão' : 'Funcionário' }}
+                </q-tooltip>
+              </q-icon>
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-promover="props">
+            <q-td align="center">
+              <q-btn
+                flat
+                dense
+                round
+                color="primary"
+                icon="arrow_upward"
+                v-if="props.row.role === 'funcionario'"
+                @click="alternarPapel(props.row)"
+              >
+                <q-tooltip>Promover a Gestão</q-tooltip>
+              </q-btn>
+              <q-btn
+                flat
+                dense
+                round
+                color="grey"
+                icon="arrow_downward"
+                v-else
+                @click="alternarPapel(props.row)"
+              >
+                <q-tooltip>Rebaixar para Funcionário</q-tooltip>
+              </q-btn>
+            </q-td>
+          </template>
+
           <template v-slot:body-cell-status="props">
             <q-td align="center">
               <q-badge :color="props.row.locked ? 'negative' : 'positive'" align="middle">
@@ -69,19 +109,6 @@
               />
             </q-td>
           </template>
-          <template v-slot:body-cell-promover="props">
-          <q-td align="center">
-            <q-btn
-              flat
-              dense
-              round
-              color="primary"
-              icon="swap_horiz"
-              @click="alternarPapel(props.row)"
-              :title="`Alterar papel: ${props.row.role === 'gestao' ? 'funcionario' : 'gestao'}`"
-            />
-          </q-td>
-        </template>
         </q-table>
       </q-card-section>
     </q-card>
@@ -114,6 +141,7 @@ const columns: QTableColumn<Usuario>[] = [
   { name: 'nome', label: 'Nome', field: 'nome', align: 'center' },
   { name: 'email', label: 'Email', field: 'email', align: 'center' },
   { name: 'role', label: 'Papel', field: 'role', align: 'center' },
+  { name: 'promover', label: 'Alterar Papel', field: () => '', align: 'center' },
   { name: 'status', label: 'Status', field: 'locked', align: 'center' },
   { name: 'excluir', label: 'Excluir', field: () => '', align: 'center' },
   { name: 'desbloquear', label: 'Desbloquear', field: () => '', align: 'center' }
@@ -126,19 +154,13 @@ async function carregarUsuarios() {
     });
     usuarios.value = res.data;
   } catch {
-    Notify.create({
-      type: 'negative',
-      message: 'Erro ao carregar usuários'
-    });
+    Notify.create({ type: 'negative', message: 'Erro ao carregar usuários' });
   }
 }
 
 async function cadastrarUsuario() {
   if (!nome.value || !email.value || !senha.value) {
-    Notify.create({
-      type: 'warning',
-      message: 'Preencha todos os campos'
-    });
+    Notify.create({ type: 'warning', message: 'Preencha todos os campos' });
     return;
   }
 
@@ -152,23 +174,18 @@ async function cadastrarUsuario() {
       headers: { Authorization: `Bearer ${auth.token}` }
     });
 
-    Notify.create({
-      type: 'positive',
-      message: 'Usuário cadastrado com sucesso'
-    });
-
+    Notify.create({ type: 'positive', message: 'Usuário cadastrado com sucesso' });
     nome.value = '';
     email.value = '';
     senha.value = '';
+    papel.value = 'funcionario';
     await carregarUsuarios();
   } catch (err: unknown) {
     let mensagem = 'Erro ao cadastrar';
-
     if (err && typeof err === 'object' && 'response' in err) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
       mensagem = axiosErr.response?.data?.detail || mensagem;
     }
-
     Notify.create({ type: 'negative', message: mensagem });
   }
 }
@@ -198,7 +215,6 @@ async function desbloquearUsuario(id: number) {
     Notify.create({ type: 'negative', message: 'Erro ao desbloquear usuário' });
   }
 }
-
 
 async function alternarPapel(usuario: Usuario) {
   const novoRole = usuario.role === 'gestao' ? 'funcionario' : 'gestao';

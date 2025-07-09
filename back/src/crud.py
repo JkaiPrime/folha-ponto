@@ -45,7 +45,18 @@ def update_failed_attempts(db: Session, user: models.User, reset: bool = False):
 
 # —— Colaborador —— #
 def create_colaborador(db: Session, colab: schemas.ColaboradorCreate):
-    db_colab = models.Colaborador(code=colab.code, nome=colab.nome)
+    user_id = None
+    if colab.email_usuario:
+        usuario = db.query(models.User).filter_by(email=colab.email_usuario).first()
+        if not usuario:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado com esse email")
+        user_id = usuario.id
+
+    db_colab = models.Colaborador(
+        code=colab.code,
+        nome=colab.nome,
+        user_id=user_id
+    )
     db.add(db_colab)
     try:
         db.commit()
@@ -54,6 +65,11 @@ def create_colaborador(db: Session, colab: schemas.ColaboradorCreate):
         raise HTTPException(status_code=400, detail="Código já existe")
     db.refresh(db_colab)
     return db_colab
+
+
+def get_colaborador_by_user_id(db: Session, user_id: int):
+    return db.query(models.Colaborador).filter(models.Colaborador.user_id == user_id).first()
+
 
 def list_colaboradores(db: Session):
     return db.query(models.Colaborador).all()
@@ -127,11 +143,12 @@ def delete_ponto(db: Session, id: int):
 
 
 
-def salvar_justificativa(db: Session, dados: schemas.JustificativaCreate):
+def salvar_justificativa(db: Session, justificativa: schemas.JustificativaCreate) -> models.Justificativa:
     nova = models.Justificativa(
-        colaborador_id=dados.colaborador_id,
-        justificativa=dados.justificativa,
-        arquivo=dados.arquivo
+        colaborador_id=justificativa.colaborador_id,
+        justificativa=justificativa.justificativa,
+        arquivo=justificativa.arquivo,
+        data_referente=justificativa.data_referente  # ✅ Adicionado corretamente
     )
     db.add(nova)
     db.commit()
