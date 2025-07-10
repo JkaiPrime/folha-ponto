@@ -63,7 +63,13 @@
           dense
           flat
           bordered
-        />
+        >
+          <template v-slot:body-cell-anexo="props">
+            <q-td :props="props" class="text-center">
+              <span v-html="props.value" />
+            </q-td>
+          </template>
+        </q-table>
       </q-card-section>
     </q-card>
   </q-page>
@@ -84,6 +90,7 @@ interface RegistroPonto {
   saida_almoco?: string;
   volta_almoco?: string;
   saida?: string;
+  arquivo?: string | null;
 }
 
 interface Colaborador {
@@ -102,7 +109,18 @@ const columns: QTableColumn<RegistroPonto>[] = [
   { name: 'entrada', label: 'Entrada', field: row => formatTime(row.entrada), align: 'center' },
   { name: 'saida_almoco', label: 'Saída Almoço', field: row => formatTime(row.saida_almoco), align: 'center' },
   { name: 'volta_almoco', label: 'Volta Almoço', field: row => formatTime(row.volta_almoco), align: 'center' },
-  { name: 'saida', label: 'Saída', field: row => formatTime(row.saida), align: 'center' }
+  { name: 'saida', label: 'Saída', field: row => formatTime(row.saida), align: 'center' },
+  {
+    name: 'anexo',
+    label: 'Anexo',
+    align: 'center',
+    field: () => '',
+    format: (_val, row) => {
+      return row.arquivo
+        ? `<a href="http://localhost:8000/justificativas/arquivo/${row.arquivo}" target="_blank" download>📎</a>`
+        : '';
+    }
+  }
 ];
 
 function formatDate(iso: unknown): string {
@@ -153,8 +171,8 @@ async function buscarPontos() {
     });
     registros.value = res.data;
   } catch {
-    Notify.create({ type: 'negative', message: 'Erro ao buscar pontos do colaborador' });
     registros.value = [];
+    Notify.create({ type: 'negative', message: 'Erro ao buscar pontos do colaborador' });
   }
 }
 

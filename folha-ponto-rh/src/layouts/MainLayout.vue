@@ -10,7 +10,7 @@
           aria-label="Abrir menu lateral"
           @click="drawer = !drawer"
         />
-        <q-toolbar-title>RH - Painel de Controle</q-toolbar-title>
+        <q-toolbar-title>PontoX - Folha Ponto</q-toolbar-title>
         <q-space />
 
         <q-btn
@@ -45,7 +45,7 @@
         </q-item>
 
         <q-item clickable v-ripple @click="irPara('/meus-pontos')">
-          <q-item-section avatar><q-icon name="fact_check" /></q-item-section>
+          <q-item-section avatar><q-icon name="visibility" /></q-item-section>
           <q-item-section>Meus pontos</q-item-section>
         </q-item>
 

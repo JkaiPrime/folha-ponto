@@ -57,10 +57,26 @@
           @added="onArquivoSelecionado"
         />
 
-        <q-btn label="Enviar Justificativa" color="primary" @click="enviar" />
+        <q-btn label="Enviar Justificativa" color="primary" @click="confirmarEnvio = true" />
       </q-card-section>
     </q-card>
   </q-page>
+  <q-dialog v-model="confirmarEnvio">
+  <q-card>
+    <q-card-section class="text-h6">
+      Confirmar envio da justificativa
+    </q-card-section>
+
+    <q-card-section>
+      Essa ação não poderá ser corrigida pelo sistema. Se estiver errado, será necessário entrar em contato com o RH.
+    </q-card-section>
+
+    <q-card-actions align="right">
+      <q-btn flat label="Cancelar" color="primary" v-close-popup />
+      <q-btn flat label="Confirmar Envio" color="negative" @click="enviarJustificativaConfirmado" />
+    </q-card-actions>
+  </q-card>
+</q-dialog>
 </template>
 
 
@@ -74,8 +90,9 @@ const auth = useAuthStore()
 const nomeColaborador = ref('')
 const codigoColaborador = ref('')
 const texto = ref('')
-const datas = ref('')
+
 const arquivo = ref<File | null>(null)
+const confirmarEnvio = ref(false)
 
 onMounted(async () => {
   try {
@@ -88,7 +105,10 @@ onMounted(async () => {
     Notify.create({ type: 'negative', message: 'Erro ao carregar colaborador' })
   }
 })
-
+async function enviarJustificativaConfirmado() {
+  confirmarEnvio.value = false
+  await enviar()
+}
 const abrirCalendario = ref(false)
 const datasSelecionadas = ref<string[]>([])
 const datasFormatadas = ref('')
@@ -123,7 +143,6 @@ async function enviar() {
 
     Notify.create({ type: 'positive', message: 'Justificativa enviada com sucesso!' })
     texto.value = ''
-    datas.value = ''
     arquivo.value = null
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao enviar justificativa' })

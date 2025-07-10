@@ -55,68 +55,82 @@ const auth = useAuthStore();
 const router = useRouter();
 
 async function handleLogin() {
-  try {
-    const data = new URLSearchParams()
-    data.append('username', email.value)
-    data.append('password', password.value)
+    try {
+      const data = new URLSearchParams()
+      data.append('username', email.value)
+      data.append('password', password.value)
 
-    const res = await api.post('/auth/login', data, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+      const res = await api.post('/auth/login', data, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      })
+      await auth.login(res.data.access_token)
+
+      Notify.create({
+        type: 'positive',
+        message: 'Login realizado com sucesso',
+        position: 'top',
+        timeout: 1500
+      });
+
+      setTimeout(() => {
+        if (auth.role === 'gestao') {
+          void router.push('/dashboard')
+        } else {
+          void router.push('/bater-ponto')
+        }
+      }, 1000);
+    } catch (err: unknown) {
+      let status = 0;
+      let detail = '';
+
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof err.response === 'object' &&
+        err.response !== null
+      ) {
+        const res = err.response as { status?: number; data?: { detail?: string } };
+        status = res.status ?? 0;
+        detail = res.data?.detail ?? '';
       }
-    })
-    await auth.login(res.data.access_token)
 
-    Notify.create({
-      type: 'positive',
-      message: 'Login realizado com sucesso',
-      position: 'top',
-      timeout: 1500
-    });
-
-    setTimeout(() => {
-      if (auth.role === 'gestao') {
-        void router.push('/dashboard')
+      if (status === 423) {
+        Notify.create({
+          type: 'warning',
+          message: 'Usuário bloqueado. Tente novamente mais tarde.',
+          position: 'top',
+          timeout: 4000
+        });
+      } else if (status === 402) {
+        Notify.create({
+          type: 'negative',
+          message: 'Credenciais inválidas. Tente novamente.',
+          position: 'top',
+          timeout: 3000
+        });
+      } else if (status === 401) {
+        Notify.create({
+          type: 'negative',
+          message: 'Sessão inválida ou expirada. Faça login novamente.',
+          position: 'top',
+          timeout: 3000
+        });
       } else {
-        void router.push('/bater-ponto')
+        Notify.create({
+          type: 'negative',
+          message: detail || 'Erro inesperado ao tentar logar.',
+          position: 'top',
+          timeout: 3000
+        });
       }
-    }, 1000);
-  } catch (err: unknown) {
-    let status = 0;
-    let detail = '';
 
-    if (
-      typeof err === 'object' &&
-      err !== null &&
-      'response' in err &&
-      typeof err.response === 'object' &&
-      err.response !== null
-    ) {
-      const res = err.response as { status?: number; data?: { detail?: string } };
-      status = res.status ?? 0;
-      detail = res.data?.detail ?? '';
+      email.value = '';
+      password.value = '';
     }
-
-    if (status === 423) {
-      Notify.create({
-        type: 'warning',
-        message: 'Usuário bloqueado. Tente novamente mais tarde.',
-        position: 'top',
-        timeout: 4000
-      });
-    } else {
-      Notify.create({
-        type: 'negative',
-        message: detail || 'Credenciais inválidas. Tente novamente.',
-        position: 'top',
-        timeout: 3000
-      });
-    }
-
-    email.value = '';
-    password.value = '';
   }
-}
 </script>
 
 <style scoped>

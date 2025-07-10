@@ -98,7 +98,7 @@ const columns: QTableColumn<Registro>[] = [
     name: 'anexo',
     label: 'Anexo',
     align: 'center',
-    field: () => '', // campo não vem direto do registro
+    field: () => '',
     format: (_val: unknown, row: Registro) => {
       return row.arquivo
         ? `<a href="http://localhost:8000/justificativas/arquivo/${row.arquivo}" target="_blank" download>📎</a>`
