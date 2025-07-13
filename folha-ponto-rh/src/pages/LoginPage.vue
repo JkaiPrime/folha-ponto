@@ -7,7 +7,7 @@
           style="width: 80px; margin-bottom: 20px;"
           spinner-color="white"
         />
-        <div class="text-h5 text-bold text-primary">Login RH</div>
+        <div class="text-h5 text-bold text-primary">Ponto X</div>
       </q-card-section>
 
       <q-card-section>
@@ -35,6 +35,8 @@
           color="primary"
           size="lg"
           class="full-width"
+          :loading="carregando"
+          :disable="carregando"
           @click="handleLogin"
         />
       </q-card-actions>
@@ -53,13 +55,15 @@ const email = ref('');
 const password = ref('');
 const auth = useAuthStore();
 const router = useRouter();
-
+const carregando = ref(false)
 async function handleLogin() {
     try {
       const data = new URLSearchParams()
       data.append('username', email.value)
       data.append('password', password.value)
+      if (carregando.value) return
 
+      carregando.value = true
       const res = await api.post('/auth/login', data, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
@@ -129,6 +133,8 @@ async function handleLogin() {
 
       email.value = '';
       password.value = '';
+    }finally{
+      carregando.value = false
     }
   }
 </script>
