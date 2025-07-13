@@ -14,9 +14,9 @@ from src.database import SessionLocal
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 40))
+SECRET_KEY = os.getenv("SECRET_KEY", "Minha KeySuperS@cret!!@31231")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 25))
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
