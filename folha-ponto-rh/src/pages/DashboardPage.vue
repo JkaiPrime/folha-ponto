@@ -101,7 +101,7 @@ const columns: QTableColumn<Registro>[] = [
     field: () => '',
     format: (_val: unknown, row: Registro) => {
       return row.arquivo
-        ? `<a href="http://localhost:8000/justificativas/arquivo/${row.arquivo}" target="_blank" download>📎</a>`
+        ? `<a href="https://folha-ponto.onrender.com/justificativas/arquivo/${row.arquivo}" target="_blank" download>📎</a>`
         : ''
     }
   }

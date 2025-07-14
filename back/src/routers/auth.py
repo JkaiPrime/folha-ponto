@@ -41,7 +41,7 @@ def authenticate_user(db: Session, email: str, password: str):
     if not pwd_context.verify(password, user.hashed_password):
         crud.update_failed_attempts(db, user)
         raise HTTPException(status_code=402, detail="Credenciais inválidas")
-    
+    crud.update_failed_attempts(db, user, reset=True)
     return user
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
