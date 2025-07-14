@@ -37,6 +37,9 @@ O backend é responsável por toda a lógica de autenticação, registro e geren
 ---
 
 ## 👩‍💼 Frontend RH (Vue + Quasar)
+Se quiser ver o front-end segue abaixo o link do deploy no vercel:
+[Vercel](https://folha-ponto-six.vercel.app/#/)
+
 
 O painel administrativo permite ao RH:
 
