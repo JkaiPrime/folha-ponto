@@ -6,7 +6,7 @@ import { Notify } from 'quasar';
 import { useAuthStore } from 'src/stores/auth';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000'
+  baseURL: 'https://folha-ponto.onrender.com'
 });
 
 export default boot(({ router }) => {
