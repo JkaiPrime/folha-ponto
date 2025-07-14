@@ -85,8 +85,11 @@ def apenas_funcionario(user: models.User = Depends(get_current_user)):
     return user
 
 def apenas_gestao(user: models.User = Depends(get_current_user)):
-    if user.role not in ["admin", "rh"]:
-        raise HTTPException(status_code=403, detail="Acesso permitido apenas para administradores ou RH")
+    if user.role not in ["gestao", "admin", "rh"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Acesso permitido apenas para usuários de gestão / RH / admin"
+        )
     return user
 
 @router.post("/login", response_model=schemas.Token)
