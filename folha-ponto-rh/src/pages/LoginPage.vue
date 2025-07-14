@@ -45,79 +45,99 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from 'src/stores/auth'
-import { Notify, Loading } from 'quasar'
-import { api } from 'boot/axios'
-import axios from 'axios'
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from 'src/stores/auth';
+import { Notify } from 'quasar';
+import { api } from 'boot/axios';
 
-
-const email      = ref('')
-const password   = ref('')
+const email = ref('');
+const password = ref('');
+const auth = useAuthStore();
+const router = useRouter();
 const carregando = ref(false)
+async function handleLogin() {
+    try {
+      const data = new URLSearchParams()
+      data.append('username', email.value)
+      data.append('password', password.value)
+      if (carregando.value) return
 
-const auth   = useAuthStore()
-const router = useRouter()
-
-async function handleLogin () {
-  if (carregando.value) return            // evita duplo-clique logo de cara
-
-  // ---- estado UI ----------------------------------------------------------
-  carregando.value = true
-  Loading.show({ message: 'Conectando ao servidor…' })
-
-  // precisamos da referência fora do try/finally para limpar depois
-  let slowTimer: ReturnType<typeof setTimeout> | undefined
-  try {
-    slowTimer = setTimeout(() => {
-      Notify.create({
-        type: 'info',
-        message: 'Levando um pouco mais de tempo, o servidor pode estar iniciando…',
-        position: 'top'
+      carregando.value = true
+      const res = await api.post('/auth/login', data, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       })
-    }, 8000)
+      await auth.login(res.data.access_token)
 
-    const data = new URLSearchParams()
-    data.append('username', email.value)
-    data.append('password', password.value)
+      Notify.create({
+        type: 'positive',
+        message: 'Login realizado com sucesso',
+        position: 'top',
+        timeout: 1500
+      });
 
-    const { data: tokenResp } = await api.post('/auth/login', data, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    })
+      setTimeout(() => {
+        if (auth.role === 'gestao') {
+          void router.push('/dashboard')
+        } else {
+          void router.push('/bater-ponto')
+        }
+      }, 1000);
+    } catch (err: unknown) {
+      let status = 0;
+      let detail = '';
 
-    await auth.login(tokenResp.access_token)
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof err.response === 'object' &&
+        err.response !== null
+      ) {
+        const res = err.response as { status?: number; data?: { detail?: string } };
+        status = res.status ?? 0;
+        detail = res.data?.detail ?? '';
+      }
 
-    Notify.create({ type: 'positive', message: 'Login realizado com sucesso', position: 'top', timeout: 1500 })
+      if (status === 423) {
+        Notify.create({
+          type: 'warning',
+          message: 'Usuário bloqueado. Tente novamente mais tarde.',
+          position: 'top',
+          timeout: 4000
+        });
+      } else if (status === 402) {
+        Notify.create({
+          type: 'negative',
+          message: 'Credenciais inválidas. Tente novamente.',
+          position: 'top',
+          timeout: 3000
+        });
+      } else if (status === 401) {
+        Notify.create({
+          type: 'negative',
+          message: 'Sessão inválida ou expirada. Faça login novamente.',
+          position: 'top',
+          timeout: 3000
+        });
+      } else {
+        Notify.create({
+          type: 'negative',
+          message: detail || 'Erro inesperado ao tentar logar.',
+          position: 'top',
+          timeout: 3000
+        });
+      }
 
-    setTimeout(() => {
-      void router.push(auth.role === 'gestao' ? '/dashboard' : '/bater-ponto')
-    }, 1000)
-
-  } catch (err: unknown) {
-    let status  = 0
-    let detail  = ''
-
-    if (axios.isAxiosError(err)) {
-      status = err.response?.status ?? 0
-      detail = (err.response?.data as { detail?: string })?.detail ?? ''
+      email.value = '';
+      password.value = '';
+    }finally{
+      carregando.value = false
     }
-
-    if      (status === 423) Notify.create({ type: 'warning',  message: 'Usuário bloqueado. Tente novamente mais tarde.', position: 'top', timeout: 4000 })
-    else if (status === 402) Notify.create({ type: 'negative', message: 'Credenciais inválidas. Tente novamente.',        position: 'top', timeout: 3000 })
-    else if (status === 401) Notify.create({ type: 'negative', message: 'Sessão inválida ou expirada. Faça login novamente.', position: 'top', timeout: 3000 })
-    else                     Notify.create({ type: 'negative', message: detail || 'Erro inesperado ao tentar logar.',    position: 'top', timeout: 3000 })
-
-    email.value    = ''
-    password.value = ''
-  } finally {
-    if (slowTimer) clearTimeout(slowTimer)  // garante que o Notify extra não apareça depois
-    Loading.hide()
-    carregando.value = false
   }
-}
 </script>
-
 
 <style scoped>
 .login-page {

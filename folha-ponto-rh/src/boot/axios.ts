@@ -4,8 +4,7 @@ import { boot } from 'quasar/wrappers';
 import axios from 'axios';
 import { Notify } from 'quasar';
 import { useAuthStore } from 'src/stores/auth';
-//baseURL: 'https://folha-ponto.onrender.com'
-//baseURL: 'http://127.0.0.1:8000'
+
 const api = axios.create({
   baseURL: 'https://folha-ponto.onrender.com'
 });
