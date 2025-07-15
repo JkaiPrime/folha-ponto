@@ -2,7 +2,7 @@
   <q-page class="q-pa-md">
     <q-card class="q-pa-md q-mx-auto" style="max-width: 500px;">
       <q-card-section class="text-center">
-        <img src="src/assets/logo.svg" alt="Logo" style="max-width: 150px;" />
+        <img src="https://www.tefway.com.br/contato.html" alt="Logo" style="max-width: 150px;" />
         <div class="text-h5 q-mt-sm">{{ horaAtual }}</div>
       </q-card-section>
 

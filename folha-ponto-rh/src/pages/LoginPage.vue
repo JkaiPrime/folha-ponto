@@ -3,7 +3,7 @@
     <q-card class="q-pa-lg login-card">
       <q-card-section class="text-center">
         <q-img
-          src="folha-ponto-rh\src\assets\logo.svg"
+          src="https://www.tefway.com.br/contato.html"
           style="width: 80px; margin-bottom: 20px;"
           spinner-color="white"
         />
