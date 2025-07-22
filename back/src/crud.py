@@ -10,6 +10,21 @@ from . import models, schemas
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# —— Auditoria (RH) —— 
+def registrar_auditoria(db: Session, user_id: int, action: str, endpoint: str, detail: str = ""):
+    from .models import AuditLog
+    audit = AuditLog(
+        user_id=user_id,
+        action=action,
+        endpoint=endpoint,
+        detail=detail
+    )
+    db.add(audit)
+    db.commit()
+
+
+
+
 # —— User (RH) —— #
 def get_user(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()

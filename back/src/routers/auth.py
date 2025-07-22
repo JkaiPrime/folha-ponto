@@ -8,15 +8,17 @@ from jose.exceptions import ExpiredSignatureError
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from dotenv import load_dotenv
-
 from src import models, crud, schemas
 from src.database import SessionLocal
+from src.utils.rate_limiter import limiter
+from fastapi import Request
 
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "Minha KeySuperS@cret!!@31231")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 25))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 1))
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -92,22 +94,72 @@ def apenas_gestao(user: models.User = Depends(get_current_user)):
         )
     return user
 
-@router.post("/login", response_model=schemas.Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = authenticate_user(db, form_data.username, form_data.password)
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.email, "role": user.role}, expires_delta=access_token_expires
-    )
-    crud.update_failed_attempts(db, user)
-    return {"access_token": access_token, "token_type": "bearer"}
 
+@limiter.limit("14/minute")
+@router.post("/login", response_model=schemas.TokenRefresh)
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = authenticate_user(db, form_data.username, form_data.password)
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token_expires = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
+    access_token = create_access_token(
+        data={"sub": user.email, "role": user.role},
+        expires_delta=access_token_expires
+    )
+    refresh_token = create_access_token(
+        data={"sub": user.email}, expires_delta=refresh_token_expires
+    )
+
+
+
+    crud.update_failed_attempts(db, user)
+    crud.registrar_auditoria(
+        db,
+        user.id,
+        action="login",
+        endpoint="/auth/login",
+        detail="Login realizado com sucesso"
+    )
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
+
+
+@limiter.limit("1/minute")
+@router.post("/refresh", response_model=schemas.Token)
+def refresh_token(request: Request, req: schemas.RefreshTokenRequest):
+    try:
+        payload = jwt.decode(req.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+        new_token = create_access_token(data={"sub": email})
+        return {"access_token": new_token, "token_type": "bearer"}
+
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expirado")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+@limiter.limit("10/minute")
 @router.post("/signup", response_model=schemas.UserResponse, status_code=201)
 def signup(
     user: schemas.UserCreate,
+    request: Request,
     db: Session = Depends(get_db),
     token: dict = Depends(verifica_token_condicional)
 ):
+    crud.registrar_auditoria(
+        db,
+        user.id,
+        action="SignUp",
+        endpoint="/auth/signup",
+        detail="Cadastro realizado com sucesso"
+    )
     return crud.create_user(db, user)
 
 @router.get("/usuarios", response_model=List[schemas.UserResponse])

@@ -1,9 +1,20 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+import os
 
-DATABASE_URL = "sqlite:///./ponto.db"
+# Carregar variáveis do .env
+load_dotenv()
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Ler a URL do banco de dados
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL não foi encontrada no .env")
+
+# Criar engine de conexão com PostgreSQL
+engine = create_engine(DATABASE_URL)
+
+# Sessão padrão
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
