@@ -1,13 +1,16 @@
-from datetime import datetime
+import os
 import shutil
+from datetime import datetime
 from typing import List
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
-from sqlalchemy.orm import Session
-import os
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+
 from src import schemas, crud, models
 from src.database import SessionLocal
-from src.routers.auth import get_current_user
+from src.routers.auth import get_current_user, apenas_gestao
+
+
 
 router = APIRouter(prefix="/justificativas", tags=["justificativas"])
 
@@ -63,6 +66,31 @@ def enviar_justificativa(
         "ids": ids_justificadas
     }
 
+@router.get("/pendentes", response_model=List[schemas.JustificativaResponse])
+def listar_pendentes(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(apenas_gestao)
+):
+    return db.query(models.Justificativa)\
+             .filter(models.Justificativa.status == "pendente")\
+             .order_by(models.Justificativa.data_envio).all()
+
+@router.patch("/{just_id}/avaliar", response_model=schemas.JustificativaResponse)
+def avaliar(
+    just_id: int,
+    body: schemas.AvaliacaoJustificativa,
+    db: Session = Depends(get_db),
+    avaliador: models.User = Depends(apenas_gestao)
+):
+    return crud.avaliar_justificativa(db, just_id, avaliador, body)
+
+@router.get("/arquivo/{nome_arquivo}")
+def baixar_arquivo_justificativa(nome_arquivo: str):
+    caminho = os.path.join(UPLOAD_DIR, nome_arquivo)
+    if not os.path.isfile(caminho):
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    return FileResponse(caminho, filename=nome_arquivo)
+
 @router.get("/{colaborador_id}", response_model=List[schemas.JustificativaResponse])
 def listar_justificativas_por_colaborador(
     colaborador_id: str,
@@ -76,10 +104,3 @@ def listar_justificativas_por_colaborador(
         .all()
     )
     return justificativas
-
-@router.get("/arquivo/{nome_arquivo}")
-def baixar_arquivo_justificativa(nome_arquivo: str):
-    caminho = os.path.join(UPLOAD_DIR, nome_arquivo)
-    if not os.path.isfile(caminho):
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-    return FileResponse(caminho, filename=nome_arquivo)

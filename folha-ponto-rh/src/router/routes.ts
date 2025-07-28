@@ -15,6 +15,7 @@ const routes = [
       { path: 'cadastrar-colaborador', component: () => import('pages/CadastrarColaborador.vue') , meta: { requiresAuth: true , role: 'gestao' } },
       { path: 'criar-acesso',component: () => import('pages/GerenciarAcesso.vue') , meta: { requiresAuth: true , role: 'gestao' } },
       { path: 'listar-colaboradores',component: () => import('pages/GerenciarColaboradores.vue') , meta: { requiresAuth: true , role: 'gestao' } },
+      { path: 'gerenciar-justificativa',component: () => import('pages/GerenciarJustificativas.vue') , meta: { requiresAuth: true , role: 'gestao' } },
       { path: '/acesso-negado', component: () => import('pages/AcessoNegado.vue')}
     ]
   },

@@ -17,6 +17,8 @@ from src.utils.rate_limiter import limiter
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
+from src.routers import auditoria
+
 
 # Cria todas as tabelas definidas em src/models.py
 Base.metadata.create_all(bind=engine)
@@ -52,44 +54,54 @@ app.include_router(colaboradores.router)
 app.include_router(justificativas.router)
 app.include_router(ponto.router)
 app.include_router(me.router)
+app.include_router(auditoria.router)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @app.on_event("startup")
-def criar_admin_e_colaborador_se_nao_existir():
+def criar_usuarios_padrao():
     db = SessionLocal()
     try:
-        if db.query(User).first() is None:
-            print("[⚙️] Nenhum usuário encontrado. Criando admin padrão...")
+        if db.query(User).count() == 0:
+            print("[⚙️] Nenhum usuário encontrado. Criando admin e RH padrão...")
 
-            hashed_password = pwd_context.hash(os.getenv("DEFAULT_ADMIN_PASSWORD"))
-            admin_user = User(
-                email=os.getenv("DEFAULT_ADMIN_EMAIL"),
-                nome=os.getenv("DEFAULT_ADMIN_NOME"),
-                hashed_password=hashed_password,
-                role=os.getenv("DEFAULT_ADMIN_ROLE", "gestao"),
-                is_active=True
-            )
-            db.add(admin_user)
-            db.commit()
-            db.refresh(admin_user)
+            users_data = [
+                {
+                    "email": os.getenv("DEFAULT_ADMIN_EMAIL"),
+                    "password": os.getenv("DEFAULT_ADMIN_PASSWORD"),
+                    "role": os.getenv("DEFAULT_ADMIN_ROLE", "gestao"),
+                    "codigo": os.getenv("DEFAULT_ADMIN_CODIGO", "000000"),
+                    "nome": os.getenv("DEFAULT_ADMIN_NOME", "Administrador")
+                },
+                {
+                    "email": os.getenv("DEFAULT_RH_EMAIL"),
+                    "password": os.getenv("DEFAULT_RH_PASSWORD"),
+                    "role": os.getenv("DEFAULT_RH_ROLE", "gestao"),
+                    "codigo": os.getenv("DEFAULT_RH_CODIGO", "000001"),
+                    "nome": os.getenv("DEFAULT_RH_NOME", "RH Padrão")
+                }
+            ]
 
-            colaborador = Colaborador(
-                code=os.getenv("DEFAULT_ADMIN_CODIGO", "000001"),
-                nome=os.getenv("DEFAULT_ADMIN_NOME"),
-                user_id=admin_user.id
-            )
-            db.add(colaborador)
-            db.commit()
+            for u in users_data:
+                hashed = pwd_context.hash(u["password"])
+                user = User(email=u["email"], nome=u["nome"], hashed_password=hashed, role=u["role"], is_active=True)
+                db.add(user)
+                db.commit()
+                db.refresh(user)
 
-            print(f"[✅] Admin criado: {admin_user.email} | Código do colaborador: {colaborador.code}")
+                colaborador = Colaborador(code=u["codigo"], nome=u["nome"], user_id=user.id)
+                db.add(colaborador)
+                db.commit()
+
+                print(f"[✅] Usuário criado: {user.email} | Código: {colaborador.code} | Papel: {user.role}")
         else:
-            print("[ℹ️] Usuários já existem. Nenhum admin criado.")
+            print("[ℹ️] Usuários já existem. Nenhum admin ou RH criado.")
     except IntegrityError:
         db.rollback()
-        print("[⚠️] Código de colaborador já existe. Verifique o DEFAULT_ADMIN_CODIGO.")
+        print("[⚠️] Erro ao criar usuários padrão. Verifique se os códigos já existem.")
     finally:
         db.close()
+
 
 
 

@@ -46,6 +46,9 @@ def authenticate_user(db: Session, email: str, password: str):
     crud.update_failed_attempts(db, user, reset=True)
     return user
 
+
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -94,6 +97,10 @@ def apenas_gestao(user: models.User = Depends(get_current_user)):
         )
     return user
 
+def apenas_rh(user: models.User = Depends(get_current_user)):
+    if user.role != "rh":
+        raise HTTPException(status_code=403, detail="Acesso restrito ao RH")
+    return user
 
 @limiter.limit("14/minute")
 @router.post("/login", response_model=schemas.TokenRefresh)
@@ -153,14 +160,15 @@ def signup(
     db: Session = Depends(get_db),
     token: dict = Depends(verifica_token_condicional)
 ):
+    db_user = crud.create_user(db, user)
     crud.registrar_auditoria(
         db,
-        user.id,
-        action="SignUp",
+        db_user.id,
+        action="criar_usuario",
         endpoint="/auth/signup",
-        detail="Cadastro realizado com sucesso"
+        detail=f"Usuário: {db_user.email}"
     )
-    return crud.create_user(db, user)
+    return db_user
 
 @router.get("/usuarios", response_model=List[schemas.UserResponse])
 def listar_usuarios(

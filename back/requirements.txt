@@ -10,4 +10,4 @@ aiofiles==23.*
 tzdata==2024.* 
 pytz
 pydantic[email]
-pip install slowapi
+slowapi

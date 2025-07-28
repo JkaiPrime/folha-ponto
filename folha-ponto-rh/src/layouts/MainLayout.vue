@@ -84,6 +84,11 @@
           <q-item-section>Gerenciar colaboradores</q-item-section>
         </q-item>
 
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/gerenciar-justificativa')">
+          <q-item-section avatar><q-icon name="rule" /></q-item-section>
+          <q-item-section>Gerenciar Justificativas</q-item-section>
+        </q-item>
+
       </q-list>
     </q-drawer>
 

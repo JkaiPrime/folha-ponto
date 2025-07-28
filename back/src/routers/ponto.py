@@ -1,14 +1,11 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from datetime import date
-from sqlalchemy.orm import joinedload
-from src import models
-from src import crud, schemas
+from sqlalchemy.orm import Session, joinedload
+from datetime import date, datetime
+from src import models, crud, schemas
 from src.database import SessionLocal
-from src.routers.auth import apenas_funcionario, get_current_user, verifica_token_acesso
+from src.routers.auth import apenas_funcionario, apenas_gestao, get_current_user
 from src.schemas import RegistroComColaboradorResponse
-
 
 router = APIRouter(prefix="/pontos", tags=["pontos"])
 
@@ -27,35 +24,48 @@ def get_db():
 def bater_ponto(
     ponto: schemas.RegistroPontoCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user)
+    user: models.User = Depends(get_current_user)
 ):
+    crud.registrar_auditoria(
+        db,
+        user.id,
+        action="marcar_ponto",
+        endpoint="/pontos/bater-ponto",
+        detail=f"Horário: {datetime.now().isoformat()}"
+    )
     return crud.registrar_ponto(db, ponto.colaborador_id)
-
 
 @router.get(
     "",
-    response_model=list[schemas.RegistroPontoResponse],
+    response_model=List[schemas.RegistroPontoResponse],
     summary="Listar todos os pontos (autenticado)"
 )
 def list_pontos(
     db: Session = Depends(get_db),
     _: schemas.UserResponse = Depends(get_current_user)
 ):
-    return crud.list_pontos(db)
+    return db.query(models.RegistroPonto).options(
+        joinedload(models.RegistroPonto.alterado_por),
+        joinedload(models.RegistroPonto.colaborador)
+    ).all()
 
 @router.put(
     "/{id}",
     response_model=schemas.RegistroPontoResponse,
     summary="Atualizar ponto (autenticado)"
 )
-def update_ponto(
+def editar_ponto(
     id: int,
-    dados: schemas.RegistroPontoUpdate,
+    atualizacao: schemas.RegistroPontoUpdate,
     db: Session = Depends(get_db),
-    _: schemas.UserResponse = Depends(get_current_user)
+    user: models.User = Depends(apenas_gestao)
 ):
-    return crud.update_ponto(db, id, dados)
-
+    return crud.update_ponto(
+        db=db,
+        id=id,
+        dados=atualizacao,
+        user_id=user.id
+    )
 
 @router.get("/hoje", response_model=List[RegistroComColaboradorResponse])
 def listar_pontos_hoje(db: Session = Depends(get_db)):
@@ -63,12 +73,14 @@ def listar_pontos_hoje(db: Session = Depends(get_db)):
 
     registros = (
         db.query(models.RegistroPonto)
-        .options(joinedload(models.RegistroPonto.colaborador))
+        .options(
+            joinedload(models.RegistroPonto.colaborador),
+            joinedload(models.RegistroPonto.alterado_por)
+        )
         .filter(models.RegistroPonto.data == hoje)
         .all()
     )
 
-    # Enriquecer com justificativas (opcional, se quiser que venha direto)
     for registro in registros:
         just = (
             db.query(models.Justificativa)
@@ -84,41 +96,77 @@ def listar_pontos_hoje(db: Session = Depends(get_db)):
 
     return registros
 
-@router.get("/por-data", response_model=List[schemas.RegistroPontoResponse])
-def listar_pontos_por_data(
-    colaborador_id: str,
-    inicio: date,
-    fim: date,
+# Endpoint fixo DEVE vir antes do endpoint dinâmico
+@router.get("/por-data", response_model=List[schemas.RegistroComColaboradorResponse])
+def pontos_por_data(
+    colaborador_code: str = Query(..., min_length=6, max_length=6),
+    inicio: date = Query(...),
+    fim: date = Query(...),
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user)
 ):
-    # Pegar pontos
-    pontos = db.query(models.RegistroPonto).filter(
-        models.RegistroPonto.colaborador_id == colaborador_id,
-        models.RegistroPonto.data.between(inicio, fim)
-    ).all()
+    colaborador = db.query(models.Colaborador).filter(models.Colaborador.code == colaborador_code).first()
 
-    # Pegar justificativas no mesmo período
-    justs = db.query(models.Justificativa).filter(
-        models.Justificativa.colaborador_id == colaborador_id,
-        models.Justificativa.data_referente.between(inicio, fim)
-    ).all()
+    if not colaborador:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
 
-    # Organizar por data
-    registros_por_data = {}
+    pontos = (
+        db.query(models.RegistroPonto)
+        .options(
+            joinedload(models.RegistroPonto.colaborador),
+            joinedload(models.RegistroPonto.alterado_por)
+        )
+        .filter(models.RegistroPonto.colaborador_id == colaborador.id)
+        .filter(models.RegistroPonto.data >= inicio)
+        .filter(models.RegistroPonto.data <= fim)
+        .order_by(models.RegistroPonto.data)
+        .all()
+    )
+
     for ponto in pontos:
-        registros_por_data[ponto.data] = ponto
+        justificativa = (
+            db.query(models.Justificativa)
+            .options(joinedload(models.Justificativa.avaliador))
+            .filter(models.Justificativa.colaborador_id == colaborador.id)
+            .filter(models.Justificativa.data_referente == ponto.data)
+            .order_by(models.Justificativa.data_envio.desc())
+            .first()
+        )
+        if justificativa:
+            setattr(ponto, "status", justificativa.status)
+            setattr(ponto, "avaliador", justificativa.avaliador)
 
-    for just in justs:
-        if just.data_referente not in registros_por_data:
-            registros_por_data[just.data_referente] = models.RegistroPonto(
-                colaborador_id=colaborador_id,
-                data=just.data_referente
-            )
-        registros_por_data[just.data_referente].justificativa = just.justificativa
-        registros_por_data[just.data_referente].arquivo = just.arquivo
+    return pontos
 
-    return list(registros_por_data.values())
+
+
+# Endpoint dinâmico precisa vir depois
+@router.get(
+    "/{colaborador_id}",
+    response_model=List[schemas.RegistroPontoResponse],
+    summary="Listar pontos por colaborador (autenticado)"
+)
+def get_por_colaborador(
+    colaborador_id: str,
+    data: date | None = None,
+    db: Session = Depends(get_db),
+    _: schemas.UserResponse = Depends(get_current_user)
+):
+    regs = (
+        db.query(models.RegistroPonto)
+        .options(
+            joinedload(models.RegistroPonto.alterado_por),
+            joinedload(models.RegistroPonto.colaborador)
+        )
+        .filter(models.RegistroPonto.colaborador_id == colaborador_id)
+        .all()
+    )
+    if data:
+        regs = [r for r in regs if r.data == data]
+    if not regs:
+        raise HTTPException(status_code=404, detail="Nenhum registro encontrado")
+    return regs
+
 
 @router.delete(
     "/{id}",
@@ -132,21 +180,3 @@ def delete_ponto(
 ):
     return crud.delete_ponto(db, id)
 
-@router.get(
-    "/{colaborador_id}",
-    response_model=list[schemas.RegistroPontoResponse],
-    summary="Listar pontos por colaborador (autenticado)"
-)
-def get_por_colaborador(
-    colaborador_id: str,
-    data: date | None = None,
-    db: Session = Depends(get_db),
-    _: schemas.UserResponse = Depends(get_current_user)
-):
-    regs = crud.list_pontos(db)
-    regs = [r for r in regs if r.colaborador_id == colaborador_id]
-    if data:
-        regs = [r for r in regs if r.data == data]
-    if not regs:
-        raise HTTPException(status_code=404, detail="Nenhum registro encontrado")
-    return regs

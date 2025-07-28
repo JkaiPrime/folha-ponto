@@ -55,45 +55,67 @@
         >
           <template v-slot:body-cell-entrada="props">
             <q-td>
-              <q-input
-                v-model="props.row.entrada"
-                type="datetime-local"
-                dense
-                outlined
-              />
+              <template v-if="props.row.id">
+                <q-input
+                  v-model="props.row.entrada"
+                  type="datetime-local"
+                  dense
+                  outlined
+                />
+              </template>
+              <template v-else>
+                <div class="text-italic text-primary">
+                  Justificativa: {{ props.row.justificativa || 'Sem motivo informado' }}
+                </div>
+              </template>
             </q-td>
           </template>
 
           <template v-slot:body-cell-saida_almoco="props">
             <q-td>
-              <q-input
-                v-model="props.row.saida_almoco"
-                type="datetime-local"
-                dense
-                outlined
-              />
+              <template v-if="props.row.id">
+                <q-input
+                  v-model="props.row.saida_almoco"
+                  type="datetime-local"
+                  dense
+                  outlined
+                />
+              </template>
+              <template v-else>
+                <div class="text-grey-6">—</div>
+              </template>
             </q-td>
           </template>
 
           <template v-slot:body-cell-volta_almoco="props">
             <q-td>
-              <q-input
-                v-model="props.row.volta_almoco"
-                type="datetime-local"
-                dense
-                outlined
-              />
+              <template v-if="props.row.id">
+                <q-input
+                  v-model="props.row.volta_almoco"
+                  type="datetime-local"
+                  dense
+                  outlined
+                />
+              </template>
+              <template v-else>
+                <div class="text-grey-6">—</div>
+              </template>
             </q-td>
           </template>
 
           <template v-slot:body-cell-saida="props">
             <q-td>
-              <q-input
-                v-model="props.row.saida"
-                type="datetime-local"
-                dense
-                outlined
-              />
+              <template v-if="props.row.id">
+                <q-input
+                  v-model="props.row.saida"
+                  type="datetime-local"
+                  dense
+                  outlined
+                />
+              </template>
+              <template v-else>
+                <div class="text-grey-6">—</div>
+              </template>
             </q-td>
           </template>
 
@@ -103,6 +125,7 @@
                 label="Salvar"
                 color="positive"
                 size="sm"
+                :disable="!props.row.id"
                 @click="salvarAlteracao(props.row)"
               />
             </q-td>
@@ -121,11 +144,12 @@ import { useAuthStore } from 'src/stores/auth';
 import type { QTableColumn } from 'quasar';
 
 interface Registro {
-  id: number;
+  id: number | null;
   entrada: string | null;
   saida_almoco: string | null;
   volta_almoco: string | null;
   saida: string | null;
+  justificativa?: string | null;
 }
 
 interface Colaborador {
@@ -190,6 +214,8 @@ async function buscarPontos() {
 }
 
 async function salvarAlteracao(registro: Registro) {
+  if (!registro.id) return;
+
   try {
     await api.put(`/pontos/${registro.id}`, {
       entrada: registro.entrada,

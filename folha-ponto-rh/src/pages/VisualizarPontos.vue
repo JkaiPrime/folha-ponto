@@ -64,9 +64,13 @@
           flat
           bordered
         >
-          <template v-slot:body-cell-anexo="props">
+          <template v-slot:body-cell-status="props">
             <q-td :props="props" class="text-center">
-              <span v-html="props.value" />
+              <q-badge
+                :color="getStatusColor(props.row.status)"
+                :label="capitalize(props.row.status)"
+                class="text-uppercase"
+              />
             </q-td>
           </template>
         </q-table>
@@ -91,6 +95,10 @@ interface RegistroPonto {
   volta_almoco?: string;
   saida?: string;
   arquivo?: string | null;
+  alterado_por?: { id: number; nome: string } | null;
+  avaliador?: { id: number; nome: string } | null;
+  status?: string;
+
 }
 
 interface Colaborador {
@@ -117,11 +125,29 @@ const columns: QTableColumn<RegistroPonto>[] = [
     field: () => '',
     format: (_val, row) => {
       return row.arquivo
-        ? `<a href="https://folha-ponto.onrender.com/justificativas/arquivo/${row.arquivo}" target="_blank" download>📎</a>`
+        ? `<a href="http://localhost:8000/justificativas/arquivo/${row.arquivo}" target="_blank" download>📎</a>`
         : '';
-    }
+    },
+  },{
+    name: 'status',
+    label: 'Status',
+    field: row => row.status || '-',
+    align: 'center'
+  },
+  {
+    name: 'alterado_por',
+    label: 'Alterado por',
+    field: row => row.alterado_por?.nome || '-',
+    align: 'center'
+  },
+  {
+    name: 'avaliador',
+    label: 'Avaliador',
+    field: row => row.avaliador?.nome || '-',
+    align: 'center'
   }
 ];
+
 
 function formatDate(iso: unknown): string {
   if (typeof iso !== 'string') return '-';
@@ -139,6 +165,21 @@ function formatTime(iso: string | null | undefined): string {
     timeZone: 'America/Sao_Paulo'
   });
 }
+
+
+function getStatusColor(status: string | undefined) {
+  switch (status) {
+    case 'aprovada': return 'positive'
+    case 'rejeitada': return 'negative'
+    case 'pendente': return 'warning'
+    default: return 'grey'
+  }
+}
+
+function capitalize(str: string | undefined) {
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : '-'
+}
+
 
 async function carregarColaboradores() {
   try {

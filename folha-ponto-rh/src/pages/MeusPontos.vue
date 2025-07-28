@@ -48,6 +48,8 @@
               <th class="text-center">Saída</th>
               <th class="text-center">Justificativa</th>
               <th class="text-center">Anexo</th>
+              <th class="text-center">Alterado por</th>
+              <th class="text-center">Avaliador</th>
             </tr>
           </thead>
           <tbody>
@@ -68,6 +70,8 @@
                   📎
                 </a>
               </td>
+              <td class="text-center">{{ p.alterado_por?.nome || '-' }}</td>
+              <td class="text-center">{{ p.avaliador?.nome || '-' }}</td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -101,6 +105,8 @@ interface Registro {
   saida: string | null
   justificativa?: string
   arquivo?: string
+  alterado_por?: { id: number, nome: string } | null
+  avaliador?: { id: number, nome: string } | null
 }
 
 const pontos = ref<Registro[]>([])  // <- Correção aqui
