@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 from src.utils.timezone import get_hora_brasilia
 
+
 from . import models, schemas
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
