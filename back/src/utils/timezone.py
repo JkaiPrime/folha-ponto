@@ -7,5 +7,6 @@ def now_sp():
 
 
 def get_hora_brasilia():
-    return datetime.now(timezone.utc) - timedelta(hours=3)
+    tz_brasilia = timezone(timedelta(hours=-3))
+    return datetime.now(tz=tz_brasilia)
 
