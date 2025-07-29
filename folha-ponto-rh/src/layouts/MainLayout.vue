@@ -38,12 +38,12 @@
           <q-item-section avatar><q-icon name="punch_clock" /></q-item-section>
           <q-item-section>Bater Ponto</q-item-section>
         </q-item>
-
+        <!--
         <q-item clickable v-ripple @click="irPara('/justificativas')">
           <q-item-section avatar><q-icon name="fact_check" /></q-item-section>
           <q-item-section>Justificativas</q-item-section>
         </q-item>
-
+        -->
         <q-item clickable v-ripple @click="irPara('/meus-pontos')">
           <q-item-section avatar><q-icon name="visibility" /></q-item-section>
           <q-item-section>Meus pontos</q-item-section>
@@ -83,6 +83,13 @@
           <q-item-section avatar><q-icon name="groups" /></q-item-section>
           <q-item-section>Gerenciar colaboradores</q-item-section>
         </q-item>
+        
+        <!--
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/gerenciar-justificativa')">
+          <q-item-section avatar><q-icon name="rule" /></q-item-section>
+          <q-item-section>Gerenciar Justificativas</q-item-section>
+        </q-item>
+        -->
 
       </q-list>
     </q-drawer>

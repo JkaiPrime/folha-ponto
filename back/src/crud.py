@@ -10,6 +10,21 @@ from . import models, schemas
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# —— Auditoria (RH) —— 
+def registrar_auditoria(db: Session, user_id: int, action: str, endpoint: str, detail: str = ""):
+    from .models import AuditLog
+    audit = AuditLog(
+        user_id=user_id,
+        action=action,
+        endpoint=endpoint,
+        detail=detail
+    )
+    db.add(audit)
+    db.commit()
+
+
+
+
 # —— User (RH) —— #
 def get_user(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
@@ -83,26 +98,22 @@ def delete_colaborador(db: Session, colaborador_id: str) -> bool:
     return False
 
 # —— Registro de Ponto —— #
-def registrar_ponto(db: Session, colaborador_id: str):
-    # Verifica se o colaborador existe
-    colaborador = db.query(models.Colaborador).filter_by(code=colaborador_id).first()
+def registrar_ponto(db: Session, colaborador_code: str):
+    colaborador = db.query(models.Colaborador).filter_by(code=colaborador_code).first()
     if not colaborador:
-        raise HTTPException(
-            status_code=404,
-            detail="Colaborador não encontrado"
-        )
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
 
     agora = now_sp()
     hoje = agora.date()
 
     reg = db.query(models.RegistroPonto).filter(
-        models.RegistroPonto.colaborador_id == colaborador_id,
+        models.RegistroPonto.colaborador_id == colaborador.id,
         models.RegistroPonto.data == hoje
     ).first()
 
     if not reg:
         reg = models.RegistroPonto(
-            colaborador_id=colaborador_id,
+            colaborador_id=colaborador.id,
             data=hoje,
             entrada=agora
         )
@@ -123,15 +134,25 @@ def registrar_ponto(db: Session, colaborador_id: str):
 def list_pontos(db: Session):
     return db.query(models.RegistroPonto).options(joinedload(models.RegistroPonto.colaborador)).all()
 
-def update_ponto(db: Session, id: int, dados: schemas.RegistroPontoUpdate):
-    reg = db.query(models.RegistroPonto).filter_by(id=id).first()
-    if not reg:
-        raise HTTPException(status_code=404, detail="Registro não encontrado")
-    for field, val in dados.dict(exclude_unset=True).items():
-        setattr(reg, field, val)
+def update_ponto(db: Session, id: int, dados: schemas.RegistroPontoUpdate, user_id: int):
+    ponto = db.query(models.RegistroPonto).filter(models.RegistroPonto.id == id).first()
+
+    if not ponto:
+        raise HTTPException(status_code=404, detail="Registro de ponto não encontrado.")
+
+
+    if ponto.justificativa:
+        raise HTTPException(status_code=400, detail="Registros de justificativa não podem ser alterados.")
+
+    for campo, valor in dados.dict(exclude_unset=True).items():
+        setattr(ponto, campo, valor)
+
+    ponto.alterado_por_id = user_id  # ✅ seta quem alterou
     db.commit()
-    db.refresh(reg)
-    return reg
+    db.refresh(ponto)
+    return ponto
+
+
 
 def delete_ponto(db: Session, id: int):
     reg = db.query(models.RegistroPonto).filter_by(id=id).first()
@@ -144,13 +165,47 @@ def delete_ponto(db: Session, id: int):
 
 
 def salvar_justificativa(db: Session, justificativa: schemas.JustificativaCreate) -> models.Justificativa:
-    nova = models.Justificativa(
-        colaborador_id=justificativa.colaborador_id,
+    colaborador = db.query(models.Colaborador).filter_by(code=str(justificativa.colaborador_id)).first()
+    if not colaborador:
+        raise ValueError("Colaborador não encontrado.")
+
+    nova_justificativa = models.Justificativa(
+        colaborador_id=colaborador.id,
         justificativa=justificativa.justificativa,
-        arquivo=justificativa.arquivo,
-        data_referente=justificativa.data_referente  # ✅ Adicionado corretamente
+        data_referente=justificativa.data_referente,
+        arquivo=justificativa.arquivo
     )
-    db.add(nova)
+
+    db.add(nova_justificativa)
     db.commit()
-    db.refresh(nova)
-    return nova
+    db.refresh(nova_justificativa)
+    return nova_justificativa
+
+
+
+def avaliar_justificativa(
+    db: Session,
+    just_id: int,
+    avaliador: models.User,
+    nova_avaliacao: schemas.AvaliacaoJustificativa
+):
+    just = db.query(models.Justificativa).filter_by(id=just_id).first()
+    if not just:
+        raise HTTPException(status_code=404, detail="Justificativa não encontrada")
+    if just.status != "pendente":
+        raise HTTPException(status_code=409, detail="Já avaliada")
+
+    just.status = nova_avaliacao.status.value
+    just.avaliador_id = avaliador.id
+    just.avaliado_em = datetime.utcnow()
+    db.commit()
+    db.refresh(just)
+
+    registrar_auditoria(
+        db,
+        avaliador.id,
+        action=f"{nova_avaliacao.status}",
+        endpoint=f"/justificativas/{just_id}/avaliar",
+        detail=f"Comentário: {nova_avaliacao.comentario or '-'}"
+    )
+    return just

@@ -46,8 +46,10 @@
               <th class="text-center">Saída Almoço</th>
               <th class="text-center">Volta Almoço</th>
               <th class="text-center">Saída</th>
-              <th class="text-center">Justificativa</th>
-              <th class="text-center">Anexo</th>
+              <!--<th class="text-center">Justificativa</th>-->
+              <!--<th class="text-center">Anexo</th>-->
+              <th class="text-center">Alterado por</th>
+              <!--<th class="text-center">Avaliador</th>-->
             </tr>
           </thead>
           <tbody>
@@ -57,7 +59,7 @@
               <td class="text-center">{{ formatar(p.saida_almoco) }}</td>
               <td class="text-center">{{ formatar(p.volta_almoco) }}</td>
               <td class="text-center">{{ formatar(p.saida) }}</td>
-              <td class="text-center">{{ p.justificativa || '-' }}</td>
+              <!--<td class="text-center">{{ p.justificativa || '-' }}</td>
               <td class="text-center">
                 <a
                   v-if="p.arquivo"
@@ -67,7 +69,9 @@
                 >
                   📎
                 </a>
-              </td>
+              </td>-->
+              <td class="text-center">{{ p.alterado_por?.nome || '-' }}</td>
+              <!--<td class="text-center">{{ p.avaliador?.nome || '-' }}</td>-->
             </tr>
           </tbody>
         </q-markup-table>
@@ -101,6 +105,8 @@ interface Registro {
   saida: string | null
   justificativa?: string
   arquivo?: string
+  alterado_por?: { id: number, nome: string } | null
+  avaliador?: { id: number, nome: string } | null
 }
 
 const pontos = ref<Registro[]>([])  // <- Correção aqui
@@ -110,37 +116,34 @@ function formatar(data: string | null | undefined) {
 }
 
 async function buscarPontos() {
-  const colaborador_id = auth.colaboradorId
-  if (!colaborador_id) {
-    Notify.create({ type: 'negative', message: 'Você não está vinculado a um colaborador.' })
-    return
-  }
-
   try {
-    let inicio = ''
-    let fim = ''
+    const colaboradorRes = await api.get('/me/colaborador', {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    });
+    const colaboradorId = colaboradorRes.data.id;
 
-    if (modo.value === 'dia') {
-      inicio = fim = dataSelecionada.value
-    } else {
-      const [ano, mes] = mesSelecionado.value.split('-')
-      inicio = dayjs(`${ano}-${mes}-01`).startOf('month').format('YYYY-MM-DD')
-      fim = dayjs(`${ano}-${mes}-01`).endOf('month').format('YYYY-MM-DD')
-    }
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+
+    const inicio = `${ano}-${mes}-01`;
+    const fim = new Date(ano, hoje.getMonth() + 1, 0).toISOString().split('T')[0];
 
     const res = await api.get('/pontos/por-data', {
       params: {
-        colaborador_id,
+        colaborador_id: colaboradorId,
         inicio,
         fim
       },
       headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    });
 
-    pontos.value = res.data
-  } catch {
-    pontos.value = []
-    Notify.create({ type: 'negative', message: 'Erro ao buscar registros de ponto' })
+    pontos.value = res.data;  // <- correção aqui
+  } catch (error) {
+    console.error('Erro ao buscar pontos:', error);
+    pontos.value = [];  // <- correção aqui
+    Notify.create({ type: 'negative', message: 'Erro ao buscar seus pontos' });
   }
 }
+
 </script>
