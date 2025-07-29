@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 from pytz import timezone
 
 def now_sp():
@@ -6,7 +6,8 @@ def now_sp():
 
 
 
+
 def get_hora_brasilia():
-    tz_brasilia = timezone(timedelta(hours=-3))
+    tz_brasilia = dt_timezone(timedelta(hours=-3))
     return datetime.now(tz=tz_brasilia)
 
