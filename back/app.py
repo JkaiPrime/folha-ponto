@@ -61,7 +61,12 @@ app.include_router(auditoria.router)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @app.on_event("startup")
-def criar_usuarios_padrao():
+def startup_configuracoes():
+    # Criar tabelas
+    print("🛠️ Criando tabelas no banco de dados...")
+    Base.metadata.create_all(bind=engine)
+
+    # Criar usuários padrão
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:
@@ -103,6 +108,7 @@ def criar_usuarios_padrao():
         print("[⚠️] Erro ao criar usuários padrão. Verifique se os códigos já existem.")
     finally:
         db.close()
+
 
 
 
