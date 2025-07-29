@@ -218,22 +218,73 @@ async function buscarPontos() {
 }
 
 function exportarExcel() {
-  const dados = registros.value.map(reg => ({
-    Data: formatDate(reg.data),
-    Entrada: formatTime(reg.entrada),
-    'Saída Almoço': formatTime(reg.saida_almoco),
-    'Volta Almoço': formatTime(reg.volta_almoco),
-    Saída: formatTime(reg.saida),
+  // ✅ Tipagem compatível com o seu array
+  type Registro = {
+    id: number;
+    data?: string;
+    entrada?: string;
+    saida_almoco?: string;
+    volta_almoco?: string;
+    saida?: string;
+    arquivo?: string | null;
+    alterado_por?: { id: number; nome: string } | null;
+    avaliador?: { id: number; nome: string } | null;
+    status?: string;
+  };
+
+  const dados = registros.value.map((reg: Registro) => ({
+    DATA: reg.data ? formatDate(reg.data) : '',
+    DIA: reg.data ? new Date(reg.data).toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase() : '',
+    Entrada: reg.entrada ? formatTime(reg.entrada) : '',
+    'Almoço saída': reg.saida_almoco ? formatTime(reg.saida_almoco) : '',
+    'Almoço retorno': reg.volta_almoco ? formatTime(reg.volta_almoco) : '',
+    Saída: reg.saida ? formatTime(reg.saida) : '',
+    'Total DIA': calcularTotalDia(reg)
   }));
 
   const ws = XLSX.utils.json_to_sheet(dados);
+
+  // Cabeçalho extra no topo
+  XLSX.utils.sheet_add_aoa(ws, [
+    ['', '', 'FOLHA PONTO - TECHWAY'],
+    [],
+    ['FUNCIONÁRIO:', getNomeColaborador()],
+    [],
+    ['DATA','DIA','Entrada','Almoço saída','Almoço retorno','Saída','Total DIA']
+  ], { origin: 'A1' });
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Pontos');
+  XLSX.utils.book_append_sheet(wb, ws, 'Folha - Ponto');
 
   const colaborador = colaboradores.value.find(c => c.code === colaboradorSelecionado.value);
   const nomeArquivo = colaborador ? colaborador.nome.replace(/\s+/g, '_') : colaboradorSelecionado.value;
-  XLSX.writeFile(wb, `pontos_${nomeArquivo}.xlsx`);
+  XLSX.writeFile(wb, `FOLHA-PONTO_${nomeArquivo}.xlsx`);
 }
+
+function getNomeColaborador(): string {
+  const colaborador = colaboradores.value.find(c => c.code === colaboradorSelecionado.value);
+  return colaborador ? colaborador.nome : 'N/A';
+}
+
+function calcularTotalDia(reg: {entrada?: string, saida?: string, saida_almoco?: string, volta_almoco?: string}): string {
+  if (!reg.entrada || !reg.saida) return '00:00:00';
+
+  const inicio = new Date(`1970-01-01T${reg.entrada}`);
+  const fim = new Date(`1970-01-01T${reg.saida}`);
+  let totalMs = fim.getTime() - inicio.getTime();
+
+  if (reg.saida_almoco && reg.volta_almoco) {
+    const almoco1 = new Date(`1970-01-01T${reg.saida_almoco}`);
+    const almoco2 = new Date(`1970-01-01T${reg.volta_almoco}`);
+    totalMs -= (almoco2.getTime() - almoco1.getTime());
+  }
+
+  const horas = Math.floor(totalMs / 3600000);
+  const minutos = Math.floor((totalMs % 3600000) / 60000);
+  return `${String(horas).padStart(2,'0')}:${String(minutos).padStart(2,'0')}:00`;
+}
+
+
 
 onMounted(carregarColaboradores);
 </script>
