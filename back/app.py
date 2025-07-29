@@ -32,7 +32,11 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="API de Ponto 🕒 com Auth e Gestão")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://folha-ponto-six.vercel.app",
+        "http://localhost:9000",          
+        "http://127.0.0.1:9000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
