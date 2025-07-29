@@ -218,7 +218,6 @@ async function buscarPontos() {
 }
 
 function exportarExcel() {
-  // ✅ Tipagem compatível com o seu array
   type Registro = {
     id: number;
     data?: string;
@@ -226,44 +225,37 @@ function exportarExcel() {
     saida_almoco?: string;
     volta_almoco?: string;
     saida?: string;
-    arquivo?: string | null;
-    alterado_por?: { id: number; nome: string } | null;
-    avaliador?: { id: number; nome: string } | null;
-    status?: string;
   };
 
-  const dados = registros.value.map((reg: Registro) => ({
-    DATA: reg.data ? formatDate(reg.data) : '',
-    DIA: reg.data ? new Date(reg.data).toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase() : '',
-    Entrada: reg.entrada ? formatTime(reg.entrada) : '',
-    'Almoço saída': reg.saida_almoco ? formatTime(reg.saida_almoco) : '',
-    'Almoço retorno': reg.volta_almoco ? formatTime(reg.volta_almoco) : '',
-    Saída: reg.saida ? formatTime(reg.saida) : '',
-    'Total DIA': calcularTotalDia(reg)
-  }));
+  const dados = registros.value.map((reg: Registro) => ([
+    reg.data ? formatDate(reg.data) : '',
+    reg.data ? new Date(reg.data).toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase() : '',
+    reg.entrada ? formatTime(reg.entrada) : '',
+    reg.saida_almoco ? formatTime(reg.saida_almoco) : '',
+    reg.volta_almoco ? formatTime(reg.volta_almoco) : '',
+    reg.saida ? formatTime(reg.saida) : '',
+    calcularTotalDia(reg)
+  ]));
 
-  const ws = XLSX.utils.json_to_sheet(dados);
+  const colaborador = colaboradores.value.find(c => c.code === colaboradorSelecionado.value);
+  const nomeColaborador = colaborador ? colaborador.nome : 'N/A';
 
-  // Cabeçalho extra no topo
-  XLSX.utils.sheet_add_aoa(ws, [
-    ['', '', 'FOLHA PONTO - TECHWAY'],
+  // ✅ Estrutura da planilha com linhas fixas
+  const wsData = [
+    ['', '', 'FOLHA PONTO - TECHWAY', 'Almoço saída', 'Almoço retorno', 'Saída', 'Total DIA'],
+    ...dados,
+    ['FUNCIONÁRIO:', nomeColaborador],
     [],
-    ['FUNCIONÁRIO:', getNomeColaborador()],
-    [],
-    ['DATA','DIA','Entrada','Almoço saída','Almoço retorno','Saída','Total DIA']
-  ], { origin: 'A1' });
+    ['DATA', 'DIA', 'Entrada', 'Almoço saída', 'Almoço retorno', 'Saída', 'Total DIA'],
+    ...dados
+  ];
 
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Folha - Ponto');
 
-  const colaborador = colaboradores.value.find(c => c.code === colaboradorSelecionado.value);
-  const nomeArquivo = colaborador ? colaborador.nome.replace(/\s+/g, '_') : colaboradorSelecionado.value;
+  const nomeArquivo = nomeColaborador.replace(/\s+/g, '_');
   XLSX.writeFile(wb, `FOLHA-PONTO_${nomeArquivo}.xlsx`);
-}
-
-function getNomeColaborador(): string {
-  const colaborador = colaboradores.value.find(c => c.code === colaboradorSelecionado.value);
-  return colaborador ? colaborador.nome : 'N/A';
 }
 
 function calcularTotalDia(reg: {entrada?: string, saida?: string, saida_almoco?: string, volta_almoco?: string}): string {
@@ -283,6 +275,7 @@ function calcularTotalDia(reg: {entrada?: string, saida?: string, saida_almoco?:
   const minutos = Math.floor((totalMs % 3600000) / 60000);
   return `${String(horas).padStart(2,'0')}:${String(minutos).padStart(2,'0')}:00`;
 }
+
 
 
 
