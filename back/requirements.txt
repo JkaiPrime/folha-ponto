@@ -11,4 +11,4 @@ tzdata==2024.*
 pytz
 pydantic[email]
 slowapi
-psycopg2
+psycopg2-binary
