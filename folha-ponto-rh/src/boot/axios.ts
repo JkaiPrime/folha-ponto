@@ -10,7 +10,7 @@ import { useAuthStore } from 'src/stores/auth';
 
 ///baseURL: 'https://folha-ponto.onrender.com'
 const api = axios.create({
-  baseURL: 'http://localhost:8000'
+  baseURL: 'https://folha-ponto.onrender.com:8000'
 });
 
 export default boot(({ router }) => {
