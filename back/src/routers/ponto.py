@@ -96,27 +96,22 @@ def listar_pontos_hoje(db: Session = Depends(get_db)):
 
     return registros
 
-# Endpoint fixo DEVE vir antes do endpoint dinâmico
+
 @router.get("/por-data", response_model=List[schemas.RegistroComColaboradorResponse])
 def pontos_por_data(
-    colaborador_code: str = Query(..., min_length=6, max_length=6),
+    colaborador_id: int = Query(...),
     inicio: date = Query(...),
     fim: date = Query(...),
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user)
 ):
-    colaborador = db.query(models.Colaborador).filter(models.Colaborador.code == colaborador_code).first()
-
-    if not colaborador:
-        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
-
     pontos = (
         db.query(models.RegistroPonto)
         .options(
             joinedload(models.RegistroPonto.colaborador),
             joinedload(models.RegistroPonto.alterado_por)
         )
-        .filter(models.RegistroPonto.colaborador_id == colaborador.id)
+        .filter(models.RegistroPonto.colaborador_id == colaborador_id)
         .filter(models.RegistroPonto.data >= inicio)
         .filter(models.RegistroPonto.data <= fim)
         .order_by(models.RegistroPonto.data)
@@ -127,7 +122,7 @@ def pontos_por_data(
         justificativa = (
             db.query(models.Justificativa)
             .options(joinedload(models.Justificativa.avaliador))
-            .filter(models.Justificativa.colaborador_id == colaborador.id)
+            .filter(models.Justificativa.colaborador_id == colaborador_id)
             .filter(models.Justificativa.data_referente == ponto.data)
             .order_by(models.Justificativa.data_envio.desc())
             .first()
@@ -137,6 +132,7 @@ def pontos_por_data(
             setattr(ponto, "avaliador", justificativa.avaliador)
 
     return pontos
+
 
 
 

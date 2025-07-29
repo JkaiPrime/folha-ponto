@@ -97,19 +97,19 @@ const columns: QTableColumn<Registro>[] = [
     label: 'Saída',
     field: row => formatTime(row.saida),
     align: 'center'
-  },
+  },/*
   {
     name: 'status_justificativa',
     label: 'Justificativa',
     align: 'center',
     field: row => row.justificativa ? 'Sim' : 'Não'
-  },
+  },*/
   {
     name: 'alterado_por',
     label: 'Alterado por',
     field: row => row.alterado_por?.nome || '—',
     align: 'center'
-  },
+  },/*
   {
     name: 'anexo',
     label: 'Anexo',
@@ -120,7 +120,7 @@ const columns: QTableColumn<Registro>[] = [
         ? `<a href="https://folha-ponto.onrender.com/justificativas/arquivo/${row.arquivo}" target="_blank" download>📎</a>`
         : ''
     }
-  }
+  }*/
 ]
 </script>
 

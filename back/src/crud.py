@@ -165,7 +165,7 @@ def delete_ponto(db: Session, id: int):
 
 
 def salvar_justificativa(db: Session, justificativa: schemas.JustificativaCreate) -> models.Justificativa:
-    colaborador = db.query(models.Colaborador).filter_by(code=justificativa.colaborador_id).first()
+    colaborador = db.query(models.Colaborador).filter_by(code=str(justificativa.colaborador_id)).first()
     if not colaborador:
         raise ValueError("Colaborador não encontrado.")
 

@@ -12,7 +12,7 @@
           <q-select
             v-model="colaboradorSelecionado"
             :options="colaboradores"
-            option-value="code"
+            option-value="id"
             option-label="nome"
             emit-value
             map-options
@@ -118,7 +118,7 @@ const columns: QTableColumn<RegistroPonto>[] = [
   { name: 'saida_almoco', label: 'Saída Almoço', field: row => formatTime(row.saida_almoco), align: 'center' },
   { name: 'volta_almoco', label: 'Volta Almoço', field: row => formatTime(row.volta_almoco), align: 'center' },
   { name: 'saida', label: 'Saída', field: row => formatTime(row.saida), align: 'center' },
-  {
+  /*{
     name: 'anexo',
     label: 'Anexo',
     align: 'center',
@@ -133,19 +133,19 @@ const columns: QTableColumn<RegistroPonto>[] = [
     label: 'Status',
     field: row => row.status || '-',
     align: 'center'
-  },
+  },*/
   {
     name: 'alterado_por',
     label: 'Alterado por',
     field: row => row.alterado_por?.nome || '-',
     align: 'center'
-  },
+  },/*
   {
     name: 'avaliador',
     label: 'Avaliador',
     field: row => row.avaliador?.nome || '-',
     align: 'center'
-  }
+  }*/
 ];
 
 

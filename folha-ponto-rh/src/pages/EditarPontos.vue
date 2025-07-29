@@ -10,7 +10,7 @@
           <q-select
             v-model="colaboradorSelecionado"
             :options="colaboradores"
-            option-value="code"
+            option-value="id"
             option-label="nome"
             emit-value
             map-options
@@ -185,7 +185,7 @@ async function carregarColaboradores() {
 
 async function buscarPontos() {
   if (!colaboradorSelecionado.value || !mesSelecionado.value) return;
-
+  console.log(colaboradorSelecionado.value)
   const [ano, mes] = mesSelecionado.value.split('-');
   const inicio = `${ano}-${mes}-01`;
   const fim = new Date(Number(ano), Number(mes), 0).toISOString().split('T')[0];
@@ -193,7 +193,7 @@ async function buscarPontos() {
   try {
     const res = await api.get('/pontos/por-data', {
       params: {
-        colaborador_id: colaboradorSelecionado.value,
+        colaborador_id: colaboradorSelecionado.value, // aqui já é o ID
         inicio,
         fim
       },
@@ -212,6 +212,7 @@ async function buscarPontos() {
     registros.value = [];
   }
 }
+
 
 async function salvarAlteracao(registro: Registro) {
   if (!registro.id) return;

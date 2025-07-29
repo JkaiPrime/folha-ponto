@@ -22,15 +22,17 @@ from src.routers import auditoria
 
 # Cria todas as tabelas definidas em src/models.py
 Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title="API de Ponto 🕒 com Auth e Gestão")
-app.add_middleware(
-    CORSMiddleware,
+'''
     allow_origins=[
         "https://folha-ponto-six.vercel.app",
         "http://localhost:9000",          
         "http://127.0.0.1:9000"
     ],
+'''
+app = FastAPI(title="API de Ponto 🕒 com Auth e Gestão")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
