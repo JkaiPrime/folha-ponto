@@ -12,7 +12,7 @@
           <q-select
             v-model="colaboradorSelecionado"
             :options="colaboradores"
-            option-value="code"
+            option-value="id"
             option-label="nome"
             emit-value
             map-options
