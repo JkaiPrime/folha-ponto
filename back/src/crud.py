@@ -98,13 +98,12 @@ def delete_colaborador(db: Session, colaborador_id: str) -> bool:
     return False
 
 # —— Registro de Ponto —— #
-def registrar_ponto(db: Session, colaborador_code: str):
+def registrar_ponto(db: Session, colaborador_code: str, hora_brasilia: datetime):
     colaborador = db.query(models.Colaborador).filter_by(code=colaborador_code).first()
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado")
 
-    agora = now_sp()
-    hoje = agora.date()
+    hoje = hora_brasilia.date()
 
     reg = db.query(models.RegistroPonto).filter(
         models.RegistroPonto.colaborador_id == colaborador.id,
@@ -115,20 +114,21 @@ def registrar_ponto(db: Session, colaborador_code: str):
         reg = models.RegistroPonto(
             colaborador_id=colaborador.id,
             data=hoje,
-            entrada=agora
+            entrada=hora_brasilia
         )
         db.add(reg)
     else:
         if not reg.saida_almoco:
-            reg.saida_almoco = agora
+            reg.saida_almoco = hora_brasilia
         elif not reg.volta_almoco:
-            reg.volta_almoco = agora
+            reg.volta_almoco = hora_brasilia
         elif not reg.saida:
-            reg.saida = agora
+            reg.saida = hora_brasilia
 
     db.commit()
     db.refresh(reg)
     return reg
+
 
 
 def list_pontos(db: Session):

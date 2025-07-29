@@ -6,6 +6,7 @@ from src import models, crud, schemas
 from src.database import SessionLocal
 from src.routers.auth import apenas_funcionario, apenas_gestao, get_current_user
 from src.schemas import RegistroComColaboradorResponse
+from src.utils.timezone import get_hora_brasilia
 
 router = APIRouter(prefix="/pontos", tags=["pontos"])
 
@@ -26,14 +27,18 @@ def bater_ponto(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
+    hora_brasilia = get_hora_brasilia()
+
     crud.registrar_auditoria(
         db,
         user.id,
         action="marcar_ponto",
         endpoint="/pontos/bater-ponto",
-        detail=f"Horário: {datetime.now().isoformat()}"
+        detail=f"Horário: {hora_brasilia.isoformat()}"
     )
-    return crud.registrar_ponto(db, ponto.colaborador_id)
+
+    return crud.registrar_ponto(db, ponto.colaborador_id, hora_brasilia)
+
 
 @router.get(
     "",
