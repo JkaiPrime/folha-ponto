@@ -227,6 +227,7 @@ function exportarExcel() {
     saida?: string;
   };
 
+  // Montar dados por dia
   const dados = registros.value.map((reg: Registro) => ([
     reg.data ? formatDate(reg.data) : '',
     reg.data ? new Date(reg.data).toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase() : '',
@@ -237,29 +238,43 @@ function exportarExcel() {
     calcularTotalDia(reg)
   ]));
 
-  const colaborador = colaboradores.value.find(c => c.code === colaboradorSelecionado.value);
-  const nomeColaborador = colaborador ? colaborador.nome : 'N/A';
+  // Somatório total mensal (em minutos)
+  const totalMinutos = registros.value.reduce((total: number, reg: Registro) => {
+    return total + calcularMinutosDia(reg);
+  }, 0);
 
-  // ✅ Estrutura da planilha com linhas fixas
+  const horasMes = Math.floor(totalMinutos / 60);
+  const minutosMes = totalMinutos % 60;
+  const totalMes = `${String(horasMes).padStart(2, '0')}:${String(minutosMes).padStart(2, '0')}:00`;
+
+  // Cabeçalho + Dados + Total Mensal
   const wsData = [
-    ['', '', 'FOLHA PONTO - TECHWAY', 'Almoço saída', 'Almoço retorno', 'Saída', 'Total DIA'],
-    ...dados,
-    ['FUNCIONÁRIO:', nomeColaborador],
-    [],
     ['DATA', 'DIA', 'Entrada', 'Almoço saída', 'Almoço retorno', 'Saída', 'Total DIA'],
-    ...dados
+    ...dados,
+    ['', '', '', '', '', 'TOTAL MÊS', totalMes]
   ];
 
+  // Criar a planilha
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Folha - Ponto');
 
-  const nomeArquivo = nomeColaborador.replace(/\s+/g, '_');
+  // Nome do colaborador no arquivo
+  const colaborador = colaboradores.value.find(c => c.code === colaboradorSelecionado.value);
+  const nomeArquivo = colaborador ? colaborador.nome.replace(/\s+/g, '_') : colaboradorSelecionado.value;
+
   XLSX.writeFile(wb, `FOLHA-PONTO_${nomeArquivo}.xlsx`);
 }
 
 function calcularTotalDia(reg: {entrada?: string, saida?: string, saida_almoco?: string, volta_almoco?: string}): string {
-  if (!reg.entrada || !reg.saida) return '00:00:00';
+  const totalMin = calcularMinutosDia(reg);
+  const horas = Math.floor(totalMin / 60);
+  const minutos = totalMin % 60;
+  return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:00`;
+}
+
+function calcularMinutosDia(reg: {entrada?: string, saida?: string, saida_almoco?: string, volta_almoco?: string}): number {
+  if (!reg.entrada || !reg.saida) return 0;
 
   const inicio = new Date(`1970-01-01T${reg.entrada}`);
   const fim = new Date(`1970-01-01T${reg.saida}`);
@@ -271,10 +286,9 @@ function calcularTotalDia(reg: {entrada?: string, saida?: string, saida_almoco?:
     totalMs -= (almoco2.getTime() - almoco1.getTime());
   }
 
-  const horas = Math.floor(totalMs / 3600000);
-  const minutos = Math.floor((totalMs % 3600000) / 60000);
-  return `${String(horas).padStart(2,'0')}:${String(minutos).padStart(2,'0')}:00`;
+  return Math.floor(totalMs / 60000); // Retorna minutos totais
 }
+
 
 
 
