@@ -4,7 +4,8 @@ from fastapi import HTTPException
 from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
-from src.utils.timezone import now_sp
+from src.utils.timezone import get_hora_brasilia
+
 
 from . import models, schemas
 
