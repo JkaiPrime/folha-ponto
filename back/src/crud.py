@@ -159,9 +159,10 @@ def delete_ponto(db: Session, id: int):
     reg = db.query(models.RegistroPonto).filter_by(id=id).first()
     if not reg:
         raise HTTPException(status_code=404, detail="Registro não encontrado")
+
     db.delete(reg)
     db.commit()
-    return reg
+    return {"message": "Registro de ponto excluído com sucesso"}
 
 
 

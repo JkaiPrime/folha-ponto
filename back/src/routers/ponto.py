@@ -171,7 +171,6 @@ def get_por_colaborador(
 
 @router.delete(
     "/{id}",
-    response_model=schemas.RegistroPontoResponse,
     summary="Excluir ponto (autenticado)"
 )
 def delete_ponto(
