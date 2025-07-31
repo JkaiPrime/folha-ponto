@@ -6,29 +6,10 @@
       </q-card-section>
 
       <q-card-section class="q-gutter-md">
-        <q-option-group
-          v-model="modo"
-          :options="[
-            { label: 'Selecionar Dia', value: 'dia' },
-            { label: 'Selecionar Mês', value: 'mes' }
-          ]"
-          color="primary"
-          inline
-        />
-
         <q-input
-          v-if="modo === 'dia'"
-          filled
-          v-model="dataSelecionada"
-          label="Data"
-          type="date"
-        />
-
-        <q-input
-          v-if="modo === 'mes'"
           filled
           v-model="mesSelecionado"
-          label="Mês"
+          label="Selecione o Mês"
           type="text"
           mask="####-##"
           hint="Formato: YYYY-MM"
@@ -46,10 +27,7 @@
               <th class="text-center">Saída Almoço</th>
               <th class="text-center">Volta Almoço</th>
               <th class="text-center">Saída</th>
-              <!--<th class="text-center">Justificativa</th>-->
-              <!--<th class="text-center">Anexo</th>-->
               <th class="text-center">Alterado por</th>
-              <!--<th class="text-center">Avaliador</th>-->
             </tr>
           </thead>
           <tbody>
@@ -59,19 +37,7 @@
               <td class="text-center">{{ formatar(p.saida_almoco) }}</td>
               <td class="text-center">{{ formatar(p.volta_almoco) }}</td>
               <td class="text-center">{{ formatar(p.saida) }}</td>
-              <!--<td class="text-center">{{ p.justificativa || '-' }}</td>
-              <td class="text-center">
-                <a
-                  v-if="p.arquivo"
-                  :href="`http://localhost:8000/justificativas/arquivo/${p.arquivo}`"
-                  target="_blank"
-                  download
-                >
-                  📎
-                </a>
-              </td>-->
               <td class="text-center">{{ p.alterado_por?.nome || '-' }}</td>
-              <!--<td class="text-center">{{ p.avaliador?.nome || '-' }}</td>-->
             </tr>
           </tbody>
         </q-markup-table>
@@ -91,9 +57,6 @@ import { useAuthStore } from 'src/stores/auth'
 import dayjs from 'dayjs'
 
 const auth = useAuthStore()
-
-const modo = ref<'dia' | 'mes'>('dia')
-const dataSelecionada = ref(dayjs().format('YYYY-MM-DD'))
 const mesSelecionado = ref(dayjs().format('YYYY-MM'))
 
 interface Registro {
@@ -109,7 +72,7 @@ interface Registro {
   avaliador?: { id: number, nome: string } | null
 }
 
-const pontos = ref<Registro[]>([])  // <- Correção aqui
+const pontos = ref<Registro[]>([])
 
 function formatar(data: string | null | undefined) {
   return data ? dayjs(data).format('HH:mm') : '-'
@@ -122,12 +85,9 @@ async function buscarPontos() {
     });
     const colaboradorId = colaboradorRes.data.id;
 
-    const hoje = new Date();
-    const ano = hoje.getFullYear();
-    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-
+    const [ano, mes] = mesSelecionado.value.split('-');
     const inicio = `${ano}-${mes}-01`;
-    const fim = new Date(ano, hoje.getMonth() + 1, 0).toISOString().split('T')[0];
+    const fim = new Date(Number(ano), Number(mes), 0).toISOString().split('T')[0];
 
     const res = await api.get('/pontos/por-data', {
       params: {
@@ -138,12 +98,11 @@ async function buscarPontos() {
       headers: { Authorization: `Bearer ${auth.token}` }
     });
 
-    pontos.value = res.data;  // <- correção aqui
+    pontos.value = res.data;
   } catch (error) {
     console.error('Erro ao buscar pontos:', error);
-    pontos.value = [];  // <- correção aqui
+    pontos.value = [];
     Notify.create({ type: 'negative', message: 'Erro ao buscar seus pontos' });
   }
 }
-
 </script>
