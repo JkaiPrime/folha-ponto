@@ -18,6 +18,7 @@ const routes = [
       { path: 'gerenciar-justificativa',component: () => import('pages/GerenciarJustificativas.vue') , meta: { requiresAuth: true , role: 'gestao' } },
       { path: '/reset-password',component: () => import('pages/ResetPassword.vue') , meta: { requiresAuth: true , role: 'gestao' } },
       { path: '/acesso-negado', component: () => import('pages/AcessoNegado.vue')}
+      
     ]
   },
   {

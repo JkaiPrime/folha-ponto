@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Date, DateTime, Integer, String,
-    Boolean, ForeignKey, Text, Time, UniqueConstraint
+    Boolean, ForeignKey, Text, Time, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -40,10 +40,10 @@ class RegistroPonto(Base):
     id = Column(Integer, primary_key=True, index=True)
     colaborador_id = Column(Integer, ForeignKey("colaboradores.id"))
     data = Column(Date, nullable=False)
-    entrada = Column(DateTime, nullable=True)
-    saida_almoco = Column(DateTime, nullable=True)
-    volta_almoco = Column(DateTime, nullable=True)
-    saida = Column(DateTime, nullable=True)
+    entrada = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    saida_almoco = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    volta_almoco = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    saida = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
     justificativa = Column(String, nullable=True)
     arquivo = Column(String, nullable=True)
     alterado_por_id = Column(Integer, ForeignKey("users.id"), nullable=True)
