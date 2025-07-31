@@ -7,7 +7,22 @@
       <q-card-section>
         <q-input v-model="nome" label="Nome" filled dense class="q-mb-sm" />
         <q-input v-model="email" label="Email" type="email" filled dense class="q-mb-sm" />
-        <q-input v-model="senha" label="Senha" type="password" filled dense class="q-mb-sm" />
+        <q-input
+          filled
+          dense
+          v-model="senha"
+          :type="isPwd ? 'password' : 'text'"
+          label="Senha"
+          class="q-mb-md"
+        >
+          <template v-slot:append>
+            <q-icon
+              :name="isPwd ? 'visibility_off' : 'visibility'"
+              class="cursor-pointer"
+              @click="isPwd = !isPwd"
+            />
+          </template>
+        </q-input>
         <q-select
           v-model="papel"
           :options="['funcionario', 'gestao']"
@@ -122,6 +137,8 @@ import { api } from 'boot/axios';
 import { useAuthStore } from 'src/stores/auth';
 import type { QTableColumn } from 'quasar';
 
+
+const isPwd = ref(true)
 const nome = ref('');
 const email = ref('');
 const senha = ref('');
