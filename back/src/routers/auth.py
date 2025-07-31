@@ -213,14 +213,23 @@ def desbloquear_usuario(
     db.refresh(usuario)
     return usuario
 
-@router.delete("/usuarios/{id}", status_code=204)
-def deletar_usuario(
-    id: int,
-    db: Session = Depends(get_db),
-    _: schemas.UserResponse = Depends(get_current_user)
-):
+@router.delete("/usuarios/{id}")
+def deletar_usuario(id: int, db: Session = Depends(get_db)):
     usuario = db.query(models.User).filter(models.User.id == id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
     db.delete(usuario)
     db.commit()
+    return {"message": "Usuário excluído com sucesso"}
+
+@router.put("/reset-password")
+def reset_password(email: str, new_password: str, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    hashed_password = pwd_context.hash(new_password)
+    user.hashed_password = hashed_password
+    db.commit()
+    return {"message": "Senha redefinida com sucesso"}

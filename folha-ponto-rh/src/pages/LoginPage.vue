@@ -23,10 +23,18 @@
           filled
           dense
           v-model="password"
+          :type="isPwd ? 'password' : 'text'"
           label="Senha"
-          type="password"
           class="q-mb-md"
-        />
+        >
+          <template v-slot:append>
+            <q-icon
+              :name="isPwd ? 'visibility_off' : 'visibility'"
+              class="cursor-pointer"
+              @click="isPwd = !isPwd"
+            />
+          </template>
+        </q-input>
       </q-card-section>
 
       <q-card-actions align="center">
@@ -51,6 +59,8 @@ import { useAuthStore } from 'src/stores/auth';
 import { Notify } from 'quasar';
 import { api } from 'boot/axios';
 
+
+const isPwd = ref(true)
 const email = ref('');
 const password = ref('');
 const auth = useAuthStore();

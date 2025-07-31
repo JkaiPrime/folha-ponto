@@ -90,7 +90,10 @@
           <q-item-section>Gerenciar Justificativas</q-item-section>
         </q-item>
         -->
-
+        <q-item v-if="auth.role === 'gestao'" clickable v-ripple @click="irPara('/reset-password')">
+          <q-item-section avatar><q-icon name="password" /></q-item-section>
+          <q-item-section>Alterar Senha</q-item-section>
+        </q-item>
       </q-list>
     </q-drawer>
 
