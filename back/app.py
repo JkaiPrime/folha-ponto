@@ -1,48 +1,61 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from src.database import engine, Base
-from src.routers.auth import router as auth_router
-from src.routers.colaboradores import router as colaboradores_router
-from src.routers.ponto import router as ponto_router
-from src.routers import justificativas, me
+from src.routers import auth, colaboradores, justificativas, ponto, me, auditoria
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from src.utils.rate_limiter import limiter
+from slowapi.errors import RateLimitExceeded
 import os
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
-
 from src.database import SessionLocal
 from src.models import User, Colaborador
-from src.routers import auth, colaboradores, justificativas, ponto, me
-from src.utils.rate_limiter import limiter
-from slowapi.errors import RateLimitExceeded
-from fastapi.responses import JSONResponse
-from fastapi.requests import Request
-from src.routers import auditoria
 
+load_dotenv()
 
-# Cria todas as tabelas definidas em src/models.py
+# Lista de origens autorizadas
+ALLOWED_ORIGINS = [
+    "https://folha-ponto-six.vercel.app",
+    "http://localhost:9000",
+    "http://127.0.0.1:9000"
+]
+
+# Cria todas as tabelas
 Base.metadata.create_all(bind=engine)
-'''
-    allow_origins=[
-        "https://folha-ponto-six.vercel.app",
-        "http://localhost:9000",          
-        "http://127.0.0.1:9000"
-    ],
-'''
+
 app = FastAPI(title="API de Ponto 🕒 com Auth e Gestão")
+
+# 1️⃣ Middleware CORS (atua no navegador)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://folha-ponto-six.vercel.app",
-        "http://localhost:9000",          
-        "http://127.0.0.1:9000"
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# 2️⃣ Middleware personalizado para reforçar bloqueio de origens externas
+@app.middleware("http")
+async def validate_origin(request: Request, call_next):
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
 
+    # Exigir sempre origem ou referer
+    if not origin and not referer:
+        return JSONResponse(status_code=403, content={"detail": "Origem obrigatória e não informada"})
+
+    # Validação por Origin
+    if origin and origin not in ALLOWED_ORIGINS:
+        return JSONResponse(status_code=403, content={"detail": "Origem não autorizada"})
+
+    # Validação por Referer
+    if referer and not any(referer.startswith(allowed) for allowed in ALLOWED_ORIGINS):
+        return JSONResponse(status_code=403, content={"detail": "Referer não autorizado"})
+
+    return await call_next(request)
+
+# Configuração do rate limiter
 app.state.limiter = limiter
 
 @app.exception_handler(RateLimitExceeded)
@@ -51,8 +64,6 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded):
         status_code=429,
         content={"detail": "Você excedeu o limite de requisições. Tente novamente em breve."}
     )
-
-
 
 # Rotas
 app.include_router(auth.router)
@@ -66,11 +77,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @app.on_event("startup")
 def startup_configuracoes():
-    # Criar tabelas
     print("🛠️ Criando tabelas no banco de dados...")
     Base.metadata.create_all(bind=engine)
 
-    # Criar usuários padrão
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:
@@ -112,10 +121,6 @@ def startup_configuracoes():
         print("[⚠️] Erro ao criar usuários padrão. Verifique se os códigos já existem.")
     finally:
         db.close()
-
-
-
-
 
 @app.get("/")
 async def root():
