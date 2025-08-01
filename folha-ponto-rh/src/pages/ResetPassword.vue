@@ -1,51 +1,35 @@
 <template>
   <q-page class="q-pa-md">
-    <q-card class="q-pa-md" style="max-width: 400px; margin: auto;">
+    <q-card class="q-pa-md q-mx-auto" style="max-width: 400px;">
       <q-card-section>
-        <div class="text-h6">Redefinir Senha</div>
+        <div class="text-h6">Alterar Senha</div>
       </q-card-section>
 
-      <q-input filled v-model="email" label="E-mail" type="email" class="q-mb-md" />
-
       <q-input
+        filled
         v-model="newPassword"
         :type="isPwd ? 'password' : 'text'"
         label="Nova Senha"
-        filled
         class="q-mb-md"
       >
         <template v-slot:append>
-          <q-icon
-            :name="isPwd ? 'visibility_off' : 'visibility'"
-            class="cursor-pointer"
-            @click="isPwd = !isPwd"
-          />
+          <q-icon :name="isPwd ? 'visibility_off' : 'visibility'" @click="isPwd = !isPwd" />
         </template>
       </q-input>
 
       <q-input
+        filled
         v-model="confirmPassword"
         :type="isPwdConfirm ? 'password' : 'text'"
         label="Confirmar Senha"
-        filled
         class="q-mb-md"
       >
         <template v-slot:append>
-          <q-icon
-            :name="isPwdConfirm ? 'visibility_off' : 'visibility'"
-            class="cursor-pointer"
-            @click="isPwdConfirm = !isPwdConfirm"
-          />
+          <q-icon :name="isPwdConfirm ? 'visibility_off' : 'visibility'" @click="isPwdConfirm = !isPwdConfirm" />
         </template>
       </q-input>
 
-      <q-btn
-        label="Redefinir"
-        color="primary"
-        @click="resetPassword"
-        :loading="loading"
-        class="full-width"
-      />
+      <q-btn label="Alterar Senha" color="primary" @click="alterarSenha" :loading="loading" />
     </q-card>
   </q-page>
 </template>
@@ -54,32 +38,31 @@
 import { ref } from 'vue'
 import { api } from 'boot/axios'
 import { Notify } from 'quasar'
-import type { AxiosError } from 'axios'
+import { useAuthStore } from 'src/stores/auth'
 
-const email = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const loading = ref(false)
 const isPwd = ref(true)
 const isPwdConfirm = ref(true)
+const loading = ref(false)
+const auth = useAuthStore()
 
-const resetPassword = async () => {
+const alterarSenha = async () => {
   if (newPassword.value !== confirmPassword.value) {
-    Notify.create({ type: 'negative', message: 'Senhas não coincidem' })
+    Notify.create({ type: 'negative', message: 'As senhas não coincidem' })
     return
   }
   loading.value = true
   try {
-    await api.put('/auth/reset-password', null, {
-      params: { email: email.value, new_password: newPassword.value }
+    await api.put('/auth/alterar-senha', null, {
+      params: { new_password: newPassword.value },
+      headers: { Authorization: `Bearer ${auth.token}` }
     })
-    Notify.create({ type: 'positive', message: 'Senha redefinida com sucesso!' })
-    email.value = ''
+    Notify.create({ type: 'positive', message: 'Senha alterada com sucesso' })
     newPassword.value = ''
     confirmPassword.value = ''
-  } catch (error: unknown) {
-    const err = error as AxiosError<{ detail?: string }>
-    Notify.create({ type: 'negative', message: err.response?.data?.detail || 'Erro ao redefinir senha' })
+  }catch {
+    Notify.create({ type: 'negative', message: 'Erro ao alterar senha' })
   } finally {
     loading.value = false
   }

@@ -223,13 +223,18 @@ def deletar_usuario(id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Usuário excluído com sucesso"}
 
-@router.put("/reset-password")
-def reset_password(email: str, new_password: str, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == email).first()
+@router.put("/alterar-senha")
+def alterar_senha(
+    new_password: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    user = db.query(models.User).filter(models.User.id == current_user.id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     
     hashed_password = pwd_context.hash(new_password)
     user.hashed_password = hashed_password
     db.commit()
-    return {"message": "Senha redefinida com sucesso"}
+    return {"message": "Senha alterada com sucesso"}
+
