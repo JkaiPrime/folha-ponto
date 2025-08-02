@@ -203,7 +203,7 @@ def login(
         value=access_token,
         httponly=True,
         secure=True,
-        samesite=None,
+        samesite="None",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
     response.set_cookie(
@@ -211,7 +211,7 @@ def login(
         value=refresh_token,
         httponly=True,
         secure=True,
-        samesite=None,
+        samesite="None",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400
     )
     return response
