@@ -202,7 +202,7 @@ def login(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=False,
         samesite="Strict",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
@@ -210,7 +210,7 @@ def login(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,
+        secure=False,
         samesite=None,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400
     )
