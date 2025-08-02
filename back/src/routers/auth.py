@@ -211,7 +211,7 @@ def login(
         value=refresh_token,
         httponly=True,
         secure=True,
-        samesite="Strict",
+        samesite=None,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400
     )
     return response
