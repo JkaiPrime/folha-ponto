@@ -19,7 +19,7 @@
             label="Selecionar colaborador"
             filled
             dense
-            @update:model-value="buscarPontos"
+            @update:model-value="carregarPontosIniciais"
           />
 
           <q-input
@@ -159,13 +159,41 @@ async function buscarPontos() {
   }
 }
 
+async function buscarPontosHoje() {
+  if (!colaboradorSelecionado.value) return;
+  try {
+    const res = await api.get(`/pontos/hoje`, {
+      params: { colaborador_id: colaboradorSelecionado.value },
+      withCredentials: true
+    });
+    if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+      registros.value = res.data;
+      console.log('[DEBUG] Pontos de hoje carregados:', registros.value);
+    }
+  } catch (error) {
+    console.error('Erro ao buscar pontos de hoje:', error);
+  }
+}
+
+async function carregarPontosIniciais() {
+  if (!colaboradorSelecionado.value) return;
+
+  // Primeiro tenta buscar pontos do dia
+  await buscarPontosHoje();
+
+  // Se não houver pontos do dia, busca do mês
+  if (registros.value.length === 0) {
+    await buscarPontos();
+  }
+}
+
 async function removerPonto(id: number) {
   if (!confirm('Tem certeza que deseja excluir este ponto?')) return;
 
   try {
     await api.delete(`/pontos/${id}`, { withCredentials: true });
     Notify.create({ type: 'positive', message: 'Ponto excluído com sucesso' });
-    await buscarPontos();
+    await carregarPontosIniciais();
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao excluir ponto' });
   }
