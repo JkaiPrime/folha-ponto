@@ -78,7 +78,6 @@
 import { ref, onMounted } from 'vue';
 import { api } from 'boot/axios';
 import { Notify } from 'quasar';
-
 import type { QTableColumn } from 'quasar';
 
 interface Registro {
@@ -91,7 +90,7 @@ interface Registro {
 }
 
 interface Colaborador {
-  code: string;
+  id: number;
   nome: string;
 }
 
@@ -127,28 +126,33 @@ const columns: QTableColumn<Registro>[] = [
 
 async function carregarColaboradores() {
   try {
-    const res = await api.get('/colaboradores');
+    const res = await api.get('/colaboradores', { withCredentials: true });
     colaboradores.value = res.data;
+    console.log('[DEBUG] Colaboradores carregados:', colaboradores.value);
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar colaboradores' });
   }
 }
 
 async function buscarPontos() {
-  if (!colaboradorSelecionado.value || !mesSelecionado.value) return;
+  if (!colaboradorSelecionado.value || !mesSelecionado.value) {
+    console.warn('[DEBUG] Colaborador ou mês não selecionado');
+    return;
+  }
 
   const [ano, mes] = mesSelecionado.value.split('-');
   const inicio = `${ano}-${mes}-01`;
   const fim = new Date(Number(ano), Number(mes), 0).toISOString().split('T')[0];
 
+  console.log('[DEBUG] Buscando pontos:', { colaborador_id: colaboradorSelecionado.value, inicio, fim });
+
   try {
     const res = await api.get('/pontos/por-data', {
-      params: {
-        colaborador_id: colaboradorSelecionado.value,
-        inicio,
-        fim
-      }});
+      params: { colaborador_id: colaboradorSelecionado.value, inicio, fim },
+      withCredentials: true
+    });
     registros.value = res.data;
+    console.log('[DEBUG] Pontos carregados:', registros.value);
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao buscar pontos do colaborador' });
     registros.value = [];
@@ -159,7 +163,7 @@ async function removerPonto(id: number) {
   if (!confirm('Tem certeza que deseja excluir este ponto?')) return;
 
   try {
-    await api.delete(`/pontos/${id}`);
+    await api.delete(`/pontos/${id}`, { withCredentials: true });
     Notify.create({ type: 'positive', message: 'Ponto excluído com sucesso' });
     await buscarPontos();
   } catch {
@@ -167,5 +171,13 @@ async function removerPonto(id: number) {
   }
 }
 
-onMounted(carregarColaboradores);
+onMounted(async () => {
+  await carregarColaboradores();
+
+  // Define mês atual automaticamente
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  mesSelecionado.value = `${ano}-${mes}`;
+});
 </script>
