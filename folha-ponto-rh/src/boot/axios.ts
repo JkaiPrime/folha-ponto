@@ -12,9 +12,6 @@ import { useAuthStore } from 'src/stores/auth';
 const api = axios.create({
   baseURL: 'https://folha-ponto.onrender.com',
   withCredentials: true,
-  headers: {
-    Origin: 'http://localhost:9000' // ✅ garante header em todas as requisições
-  }
 });
 
 export default boot(({ router }) => {
