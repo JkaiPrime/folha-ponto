@@ -10,7 +10,11 @@ import { useAuthStore } from 'src/stores/auth';
 
 ///baseURL: 'https://folha-ponto.onrender.com'
 const api = axios.create({
-  baseURL: 'https://folha-ponto.onrender.com'
+  baseURL: 'http://localhost:8000',
+  withCredentials: true,
+  headers: {
+    Origin: 'http://localhost:9000' // ✅ garante header em todas as requisições
+  }
 });
 
 export default boot(({ router }) => {
@@ -19,7 +23,7 @@ export default boot(({ router }) => {
     error => {
       if (error.response?.status === 401) {
         const auth = useAuthStore();
-        auth.logout();
+        void auth.logout();
 
         Notify.create({
           type: 'warning',

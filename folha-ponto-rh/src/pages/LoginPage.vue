@@ -58,96 +58,58 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from 'src/stores/auth';
 import { Notify } from 'quasar';
 import { api } from 'boot/axios';
+import axios from 'axios';
 
-
-const isPwd = ref(true)
+const isPwd = ref(true);
 const email = ref('');
 const password = ref('');
 const auth = useAuthStore();
 const router = useRouter();
-const carregando = ref(false)
+const carregando = ref(false);
+
 async function handleLogin() {
-    try {
-      const data = new URLSearchParams()
-      data.append('username', email.value)
-      data.append('password', password.value)
-      if (carregando.value) return
+  console.log('[DEBUG] Iniciando handleLogin...');
+  carregando.value = true;
 
-      carregando.value = true
-      const res = await api.post('/auth/login', data, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      })
-      await auth.login(res.data.access_token)
+  try {
+    const data = new URLSearchParams()
+    data.append('username', email.value)
+    data.append('password', password.value)
 
-      Notify.create({
-        type: 'positive',
-        message: 'Login realizado com sucesso',
-        position: 'top',
-        timeout: 1500
-      });
+    await api.post('/auth/login', data, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      withCredentials: true
+    })
 
-      setTimeout(() => {
-        if (auth.role === 'gestao') {
-          void router.push('/dashboard')
-        } else {
-          void router.push('/bater-ponto')
-        }
-      }, 1000);
-    } catch (err: unknown) {
-      let status = 0;
-      let detail = '';
-
-      if (
-        typeof err === 'object' &&
-        err !== null &&
-        'response' in err &&
-        typeof err.response === 'object' &&
-        err.response !== null
-      ) {
-        const res = err.response as { status?: number; data?: { detail?: string } };
-        status = res.status ?? 0;
-        detail = res.data?.detail ?? '';
-      }
-
-      if (status === 423) {
-        Notify.create({
-          type: 'warning',
-          message: 'Usuário bloqueado. Tente novamente mais tarde.',
-          position: 'top',
-          timeout: 4000
-        });
-      } else if (status === 402) {
-        Notify.create({
-          type: 'negative',
-          message: 'Credenciais inválidas. Tente novamente.',
-          position: 'top',
-          timeout: 3000
-        });
-      } else if (status === 401) {
-        Notify.create({
-          type: 'negative',
-          message: 'Sessão inválida ou expirada. Faça login novamente.',
-          position: 'top',
-          timeout: 3000
-        });
-      } else {
-        Notify.create({
-          type: 'negative',
-          message: detail || 'Erro inesperado ao tentar logar.',
-          position: 'top',
-          timeout: 3000
-        });
-      }
-
-      email.value = '';
-      password.value = '';
-    }finally{
-      carregando.value = false
+    await auth.fetchUser()
+    // Redireciona conforme papel do usuário
+    if (auth.role === 'gestao') {
+      void router.push('/dashboard')
+    } else {
+      void router.push('/bater-ponto')
     }
+
+  } catch (err: unknown) {
+    let mensagem = 'Erro ao tentar login.'
+    if (axios.isAxiosError(err)) {
+      const status = err.response?.status
+      const detail = err.response?.data?.detail
+
+      if (status === 402) {
+        mensagem = detail || 'Credenciais inválidas.'
+      } else if (status === 423) {
+        mensagem = 'Conta bloqueada por múltiplas tentativas incorretas.'
+      }
+    }
+
+    Notify.create({ type: 'negative', message: mensagem, position: 'top' })
+  } finally {
+    carregando.value = false;
   }
+}
+
 </script>
+
 
 <style scoped>
 .login-page {

@@ -140,7 +140,6 @@
 import { ref, onMounted } from 'vue';
 import { Notify } from 'quasar';
 import { api } from 'boot/axios';
-import { useAuthStore } from 'src/stores/auth';
 import type { QTableColumn } from 'quasar';
 
 interface Registro {
@@ -157,7 +156,7 @@ interface Colaborador {
   nome: string;
 }
 
-const auth = useAuthStore();
+
 
 const colaboradores = ref<Colaborador[]>([]);
 const colaboradorSelecionado = ref<string | null>(null);
@@ -174,9 +173,7 @@ const columns: QTableColumn[] = [
 
 async function carregarColaboradores() {
   try {
-    const res = await api.get('/colaboradores', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    const res = await api.get('/colaboradores');
     colaboradores.value = res.data;
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar colaboradores' });
@@ -196,8 +193,7 @@ async function buscarPontos() {
         colaborador_id: colaboradorSelecionado.value, // aqui já é o ID
         inicio,
         fim
-      },
-      headers: { Authorization: `Bearer ${auth.token}` }
+      }
     });
 
     registros.value = res.data.map((r: Registro) => ({
@@ -223,8 +219,6 @@ async function salvarAlteracao(registro: Registro) {
       saida_almoco: registro.saida_almoco,
       volta_almoco: registro.volta_almoco,
       saida: registro.saida
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     });
 
     Notify.create({ type: 'positive', message: 'Registro atualizado com sucesso!' });

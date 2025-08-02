@@ -104,25 +104,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from 'src/stores/auth';
 
 const drawer = ref(false);
 const router = useRouter();
 const route = useRoute();
+const auth = useAuthStore();
 
 const mostrarMenu = computed<boolean>(() => route.path !== '/');
 
-function irPara(path: string) {
-  drawer.value = false;
-  void router.push(path);
-}
-import { useAuthStore } from 'src/stores/auth';
-
-const auth = useAuthStore();
+onMounted(async () => {
+  if (!auth.userLoaded) {
+    await auth.fetchUser();
+  }
+});
 
 function logout() {
-  auth.logout();
+  void auth.logout();
   void router.push('/');
 }
+
+function irPara(path: string) {
+  drawer.value = false;
+  void router.replace(path);
+}
 </script>
+

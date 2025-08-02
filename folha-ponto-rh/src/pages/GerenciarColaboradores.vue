@@ -37,7 +37,6 @@
 import { ref, onMounted } from 'vue';
 import { api } from 'boot/axios';
 import { Notify } from 'quasar';
-import { useAuthStore } from 'src/stores/auth';
 import type { QTableColumn } from 'quasar';
 
 interface Colaborador {
@@ -46,7 +45,7 @@ interface Colaborador {
 }
 
 const colaboradores = ref<Colaborador[]>([]);
-const auth = useAuthStore();
+
 
 const columns: QTableColumn<Colaborador>[] = [
   { name: 'code', label: 'Código', field: 'code', align: 'center' },
@@ -56,9 +55,7 @@ const columns: QTableColumn<Colaborador>[] = [
 
 async function carregarColaboradores() {
   try {
-    const res = await api.get('/colaboradores', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    const res = await api.get('/colaboradores');
     colaboradores.value = res.data;
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar colaboradores' });
@@ -69,9 +66,7 @@ async function removerColaborador(code: string) {
   if (!confirm('Tem certeza que deseja excluir este colaborador?')) return;
 
   try {
-    await api.delete(`/colaboradores/${code}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    await api.delete(`/colaboradores/${code}`);
     Notify.create({ type: 'positive', message: 'Colaborador excluído com sucesso' });
     await carregarColaboradores();
   } catch {

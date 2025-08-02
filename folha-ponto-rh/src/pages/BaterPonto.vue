@@ -43,7 +43,6 @@
 import { ref, onMounted } from 'vue'
 import { api } from 'boot/axios'
 import { Notify } from 'quasar'
-import { useAuthStore } from 'src/stores/auth'
 import dayjs from 'dayjs'
 
 const horaAtual = ref(dayjs().format('HH:mm:ss'))
@@ -52,14 +51,12 @@ const mensagemSucesso = ref('')
 
 const nomeColaborador = ref('')
 const codigoColaborador = ref('')
-const auth = useAuthStore()
+
 
 onMounted(async () => {
   atualizarHora()
   try {
-    const res = await api.get('/me/colaborador', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    const res = await api.get('/me/colaborador')
     nomeColaborador.value = res.data.nome
     codigoColaborador.value = res.data.code
   } catch {
@@ -85,10 +82,6 @@ async function baterPonto() {
   try {
     const res = await api.post('/pontos/bater-ponto', {
       colaborador_id: codigoColaborador.value
-    }, {
-      headers: {
-        Authorization: `Bearer ${auth.token}`
-      }
     })
 
     if (res?.data?.tipo) {

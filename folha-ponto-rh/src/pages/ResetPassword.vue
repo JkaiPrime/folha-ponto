@@ -38,14 +38,14 @@
 import { ref } from 'vue'
 import { api } from 'boot/axios'
 import { Notify } from 'quasar'
-import { useAuthStore } from 'src/stores/auth'
+
 
 const newPassword = ref('')
 const confirmPassword = ref('')
 const isPwd = ref(true)
 const isPwdConfirm = ref(true)
 const loading = ref(false)
-const auth = useAuthStore()
+
 
 const alterarSenha = async () => {
   if (newPassword.value !== confirmPassword.value) {
@@ -55,9 +55,7 @@ const alterarSenha = async () => {
   loading.value = true
   try {
     await api.put('/auth/alterar-senha', null, {
-      params: { new_password: newPassword.value },
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+      params: { new_password: newPassword.value }})
     Notify.create({ type: 'positive', message: 'Senha alterada com sucesso' })
     newPassword.value = ''
     confirmPassword.value = ''

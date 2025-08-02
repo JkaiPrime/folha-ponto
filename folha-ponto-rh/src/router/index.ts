@@ -25,34 +25,35 @@ export default defineRouter(function () {
     history: createHistory(process.env.VUE_ROUTER_BASE)
   });
 
-  routerInstance.beforeEach((to, from, next) => {
-    const auth = useAuthStore();
+  routerInstance.beforeEach(async (to, from, next) => {
+  const auth = useAuthStore();
+  console.log('[DEBUG] Navegando para:', to.path);
 
-    // Redirecionamento da página de login
-    if (to.path === '/') {
-      if (auth.token) {
-        next('/dashboard');
-        return;
-      } else {
-        next();
-        return;
-      }
-    }
+  // 🔹 Garante que os dados do usuário sejam carregados
+  if (!auth.userLoaded) {
+    await auth.fetchUser();
+  }
 
-    // Bloqueio de rotas que requerem autenticação
-    if (to.meta.requiresAuth && !auth.token) {
-      next('/');
-      return;
-    }
+  // ✅ Sempre permite a rota de login, mesmo se não estiver autenticado
+  if (to.path === '/') {
+    return next();
+  }
 
-    // Bloqueio por papel (gestao ou funcionario)
-    if (to.meta.role && auth.role !== to.meta.role) {
-      next('/acesso-negado'); // Crie essa página para 403 ou use /bater-ponto
-      return;
-    }
+  // Bloqueio de rotas que exigem autenticação
+  if (to.meta.requiresAuth && (!auth.token && !auth.colaboradorId)) {
+    console.warn('[DEBUG] Usuário sem sessão, redirecionando para login');
+    return next('/');
+  }
 
-    next();
-  });
+  // Bloqueio por papel
+  if (to.meta.role && auth.role !== to.meta.role) {
+    console.warn('[DEBUG] Acesso negado para role:', auth.role);
+    return next('/acesso-negado');
+  }
+
+  next();
+});
+
 
   return routerInstance;
 });
