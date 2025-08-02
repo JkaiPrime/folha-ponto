@@ -53,9 +53,7 @@ const registros = ref<Registro[]>([])
 
 onMounted(async () => {
   try {
-    const res = await api.get('/pontos/hoje', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    })
+    const res = await api.get('/pontos/hoje')
     console.log('📦 Resposta da API /pontos/hoje:', res.data)
     registros.value = res.data
   } catch {

@@ -12,39 +12,83 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
   const role = ref<'gestao' | 'funcionario' | null>(null)
   const colaboradorId = ref<string | null>(null)
+  const userLoaded = ref(false)
 
+  // ✅ Inicializa se houver token salvo (compatibilidade)
   if (token.value) {
-    const decoded = jwtDecode<JwtPayload>(token.value)
-    role.value = decoded.role
+    try {
+      const decoded = jwtDecode<JwtPayload>(token.value)
+      role.value = decoded.role
 
-    // Opcional: recuperar colaboradorId se estiver em uso contínuo
-    api.get('/me/colaborador', {
-      headers: { Authorization: `Bearer ${token.value}` }
-    }).then(res => {
-      colaboradorId.value = res.data.code
-    }).catch(() => {
-      colaboradorId.value = null
-    })
+      api.get('/me/colaborador', {
+        headers: { Authorization: `Bearer ${token.value}` },
+        withCredentials: true
+      }).then(res => {
+        colaboradorId.value = res.data.code
+        role.value = res.data.role || decoded.role
+      }).catch(() => {
+        colaboradorId.value = null
+      }).finally(() => {
+        userLoaded.value = true
+      })
+    } catch {
+      userLoaded.value = true
+    }
+  } else {
+    userLoaded.value = true
   }
 
-  async function login(novoToken: string) {
-    token.value = novoToken
-    localStorage.setItem('token', novoToken)
-
-    const decoded = jwtDecode<JwtPayload>(novoToken)
-    role.value = decoded.role
-
+  // ✅ Sessão via cookies HttpOnly
+  async function fetchUser() {
+    console.log('[DEBUG] Iniciando fetchUser()...');
     try {
-      const res = await api.get('/me/colaborador', {
-        headers: { Authorization: `Bearer ${novoToken}` }
-      })
-      colaboradorId.value = res.data.code
-    } catch {
-      colaboradorId.value = null
+      const res = await api.get('/me/colaborador', { withCredentials: true });
+      console.log('[DEBUG] /me/colaborador response:', res.data);
+
+      colaboradorId.value = res.data.code;
+      role.value = res.data.role;
+      console.log('[DEBUG] Role setada:', role.value);
+    } catch (error) {
+      console.error('[DEBUG] Erro em fetchUser:', error);
+      colaboradorId.value = null;
+      role.value = null;
+    } finally {
+      userLoaded.value = true;
+      console.log('[DEBUG] userLoaded:', userLoaded.value);
     }
   }
 
-  function logout() {
+  async function login(novoToken: string) {
+    console.log('[DEBUG] Iniciando login()...');
+    token.value = novoToken;
+    localStorage.setItem('token', novoToken);
+
+    try {
+      const decoded = jwtDecode<JwtPayload>(novoToken);
+      role.value = decoded.role;
+      console.log('[DEBUG] Token decodificado:', decoded);
+
+      const res = await api.get('/me/colaborador', {
+        headers: { Authorization: `Bearer ${novoToken}` },
+        withCredentials: true
+      });
+      console.log('[DEBUG] Dados do colaborador via token:', res.data);
+
+      colaboradorId.value = res.data.code;
+      role.value = res.data.role || decoded.role;
+    } catch (error) {
+      console.error('[DEBUG] Erro no login (me/colaborador):', error);
+      colaboradorId.value = null;
+    }
+  }
+
+  async function logout() {
+    try {
+      await api.post('/auth/logout', null, { withCredentials: true })
+    } catch (e) {
+      console.warn('Falha ao invalidar sessão no servidor', e)
+    }
+
     token.value = null
     role.value = null
     colaboradorId.value = null
@@ -55,7 +99,9 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     role,
     colaboradorId,
+    userLoaded,
     login,
-    logout
+    logout,
+    fetchUser
   }
 })

@@ -11,6 +11,12 @@ from . import models, schemas
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
+
+MAX_TENTATIVAS = 3
+TEMPO_BLOQUEIO_MINUTOS = 15
+
+
 # —— Auditoria (RH) —— 
 def registrar_auditoria(db: Session, user_id: int, action: str, endpoint: str, detail: str = ""):
     from .models import AuditLog
@@ -45,19 +51,36 @@ def create_user(db: Session, user: schemas.UserCreate):
     db.refresh(db_user)
     return db_user
 
-def update_failed_attempts(db: Session, user: models.User, reset: bool = False):
+def update_failed_attempts(db: Session, user: models.User, reset: bool = False) -> int:
+    """
+    Atualiza tentativas de login falhas de um usuário.
+    
+    Args:
+        db (Session): Sessão do banco de dados
+        user (models.User): Usuário a ser atualizado
+        reset (bool): Se True, zera as tentativas e desbloqueia a conta
+
+    Returns:
+        int: Número de tentativas restantes antes do bloqueio
+    """
     if reset:
         user.failed_attempts = 0
         user.locked = False
         user.locked_until = None
     else:
         user.failed_attempts += 1
-        if user.failed_attempts >= 3:
+
+        # Bloquear conta se atingir limite
+        if user.failed_attempts >= MAX_TENTATIVAS:
             user.locked = True
-            user.locked_until = datetime.utcnow() + timedelta(minutes=15)
+            user.locked_until = datetime.utcnow() + timedelta(minutes=TEMPO_BLOQUEIO_MINUTOS)
+
     db.commit()
     db.refresh(user)
-    return user
+
+    # Calcula tentativas restantes (não permitir negativo)
+    tentativas_restantes = max(0, MAX_TENTATIVAS - user.failed_attempts)
+    return tentativas_restantes
 
 # —— Colaborador —— #
 def create_colaborador(db: Session, colab: schemas.ColaboradorCreate):

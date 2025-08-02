@@ -28,7 +28,7 @@
 import { ref, onMounted } from 'vue'
 import { Notify } from 'quasar'
 import { api } from 'boot/axios'
-import { useAuthStore } from 'src/stores/auth'
+
 
 const codigo = ref('')
 const nome = ref('')
@@ -45,7 +45,7 @@ interface UsuarioResponse {
 }
 
 
-const auth = useAuthStore()
+
 
 onMounted(() => {
   void carregarUsuarios()
@@ -53,9 +53,7 @@ onMounted(() => {
 
 async function carregarUsuarios() {
   try {
-    const res = await api.get('/auth/usuarios', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    const res = await api.get('/auth/usuarios')
     emailsUsuarios.value = (res.data as UsuarioResponse[]).map((u) => u.email)
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar usuários' })
@@ -73,8 +71,6 @@ async function cadastrarColaborador() {
       email_usuario: emailUsuario.value,
       code: codigo.value,
       nome: nome.value
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
     })
 
     Notify.create({ type: 'positive', message: 'Colaborador cadastrado com sucesso' })

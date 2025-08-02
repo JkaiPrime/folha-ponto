@@ -53,10 +53,9 @@
 import { ref } from 'vue'
 import { api } from 'boot/axios'
 import { Notify } from 'quasar'
-import { useAuthStore } from 'src/stores/auth'
 import dayjs from 'dayjs'
 
-const auth = useAuthStore()
+
 const mesSelecionado = ref(dayjs().format('YYYY-MM'))
 
 interface Registro {
@@ -80,9 +79,7 @@ function formatar(data: string | null | undefined) {
 
 async function buscarPontos() {
   try {
-    const colaboradorRes = await api.get('/me/colaborador', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    const colaboradorRes = await api.get('/me/colaborador');
     const colaboradorId = colaboradorRes.data.id;
 
     const [ano, mes] = mesSelecionado.value.split('-');
@@ -94,9 +91,7 @@ async function buscarPontos() {
         colaborador_id: colaboradorId,
         inicio,
         fim
-      },
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+      }});
 
     pontos.value = res.data;
   } catch (error) {

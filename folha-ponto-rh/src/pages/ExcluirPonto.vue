@@ -78,7 +78,7 @@
 import { ref, onMounted } from 'vue';
 import { api } from 'boot/axios';
 import { Notify } from 'quasar';
-import { useAuthStore } from 'src/stores/auth';
+
 import type { QTableColumn } from 'quasar';
 
 interface Registro {
@@ -95,7 +95,6 @@ interface Colaborador {
   nome: string;
 }
 
-const auth = useAuthStore();
 const colaboradores = ref<Colaborador[]>([]);
 const colaboradorSelecionado = ref<string | null>(null);
 const mesSelecionado = ref<string | null>(null);
@@ -128,9 +127,7 @@ const columns: QTableColumn<Registro>[] = [
 
 async function carregarColaboradores() {
   try {
-    const res = await api.get('/colaboradores', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    const res = await api.get('/colaboradores');
     colaboradores.value = res.data;
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar colaboradores' });
@@ -150,11 +147,7 @@ async function buscarPontos() {
         colaborador_id: colaboradorSelecionado.value,
         inicio,
         fim
-      },
-      headers: {
-        Authorization: `Bearer ${auth.token}`
-      }
-    });
+      }});
     registros.value = res.data;
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao buscar pontos do colaborador' });
@@ -166,9 +159,7 @@ async function removerPonto(id: number) {
   if (!confirm('Tem certeza que deseja excluir este ponto?')) return;
 
   try {
-    await api.delete(`/pontos/${id}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    await api.delete(`/pontos/${id}`);
     Notify.create({ type: 'positive', message: 'Ponto excluído com sucesso' });
     await buscarPontos();
   } catch {

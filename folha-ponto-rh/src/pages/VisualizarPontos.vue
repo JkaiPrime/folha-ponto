@@ -83,7 +83,6 @@
 import { ref, onMounted } from 'vue';
 import { Notify } from 'quasar';
 import { api } from 'boot/axios';
-import { useAuthStore } from 'src/stores/auth';
 import * as XLSX from 'xlsx';
 import type { QTableColumn } from 'quasar';
 
@@ -106,7 +105,6 @@ interface Colaborador {
   nome: string;
 }
 
-const auth = useAuthStore();
 const colaboradores = ref<Colaborador[]>([]);
 const colaboradorSelecionado = ref<string | null>(null);
 const mesSelecionado = ref<string | null>(null);
@@ -183,9 +181,7 @@ function capitalize(str: string | undefined) {
 
 async function carregarColaboradores() {
   try {
-    const res = await api.get('/colaboradores', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    const res = await api.get('/colaboradores');
     colaboradores.value = res.data;
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar colaboradores' });
@@ -205,9 +201,6 @@ async function buscarPontos() {
         colaborador_id: colaboradorSelecionado.value,
         inicio,
         fim
-      },
-      headers: {
-        Authorization: `Bearer ${auth.token}`
       }
     });
     registros.value = res.data;

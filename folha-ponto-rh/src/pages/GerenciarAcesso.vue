@@ -134,8 +134,8 @@
 import { ref, onMounted } from 'vue';
 import { Notify } from 'quasar';
 import { api } from 'boot/axios';
-import { useAuthStore } from 'src/stores/auth';
 import type { QTableColumn } from 'quasar';
+import type { AxiosError } from 'axios';
 
 
 const isPwd = ref(true)
@@ -143,7 +143,7 @@ const nome = ref('');
 const email = ref('');
 const senha = ref('');
 const usuarios = ref([]);
-const auth = useAuthStore();
+
 const papel = ref('funcionario');
 
 interface Usuario {
@@ -166,9 +166,7 @@ const columns: QTableColumn<Usuario>[] = [
 
 async function carregarUsuarios() {
   try {
-    const res = await api.get('/auth/usuarios', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    const res = await api.get('/auth/usuarios');
     usuarios.value = res.data;
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar usuários' });
@@ -181,39 +179,65 @@ async function cadastrarUsuario() {
     return;
   }
 
+  console.log('[DEBUG] Tentando cadastrar usuário...', {
+    nome: nome.value,
+    email: email.value,
+    role: papel.value
+  });
+
   try {
-    await api.post('/auth/signup', {
-      nome: nome.value,
-      email: email.value,
-      password: senha.value,
-      role: papel.value
-    }, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    const res = await api.post(
+      '/auth/signup',
+      {
+        nome: nome.value,
+        email: email.value,
+        password: senha.value,
+        role: papel.value
+      },
+      {
+        withCredentials: true // ✅ garante envio do cookie JWT
+      }
+    );
+
+    console.log('[DEBUG] Resposta do cadastro:', res.data);
 
     Notify.create({ type: 'positive', message: 'Usuário cadastrado com sucesso' });
+
     nome.value = '';
     email.value = '';
     senha.value = '';
     papel.value = 'funcionario';
     await carregarUsuarios();
   } catch (err: unknown) {
-    let mensagem = 'Erro ao cadastrar';
-    if (err && typeof err === 'object' && 'response' in err) {
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      mensagem = axiosErr.response?.data?.detail || mensagem;
+    const error = err as AxiosError<{ detail?: string }>;
+    console.log('[DEBUG] Erro ao cadastrar usuário:', err);
+
+    let mensagem = 'Erro ao cadastrar usuário';
+    if (error.response) {
+      console.log('[DEBUG] Status da resposta:', error.response.status);
+      console.log('[DEBUG] Detalhes:', error.response.data);
+
+      mensagem = error.response.data?.detail || mensagem;
+
+      if (error.response.status === 401) {
+        mensagem = 'Não autorizado. Verifique se está logado como gestor.';
+      } else if (error.response.status === 403) {
+        mensagem = 'Permissão negada para cadastrar usuários.';
+      } else if (error.response.status === 422) {
+        mensagem = 'Dados inválidos enviados. Verifique os campos.';
+      }
     }
+
     Notify.create({ type: 'negative', message: mensagem });
   }
 }
+
 
 async function excluirUsuario(id: number) {
   if (!confirm('Deseja realmente excluir este usuário?')) return;
 
   try {
-    await api.delete(`/auth/usuarios/${id}`, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    await api.delete(`/auth/usuarios/${id}`);
     Notify.create({ type: 'positive', message: 'Usuário excluído' });
     await carregarUsuarios();
   } catch {
@@ -223,9 +247,7 @@ async function excluirUsuario(id: number) {
 
 async function desbloquearUsuario(id: number) {
   try {
-    await api.post(`/auth/usuarios/${id}/desbloquear`, {}, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    await api.post(`/auth/usuarios/${id}/desbloquear`);
     Notify.create({ type: 'positive', message: 'Usuário desbloqueado com sucesso' });
     await carregarUsuarios();
   } catch {
@@ -240,9 +262,7 @@ async function alternarPapel(usuario: Usuario) {
     const formData = new FormData();
     formData.append('role', novoRole);
 
-    await api.patch(`/auth/usuarios/${usuario.id}/papel`, formData, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    });
+    await api.patch(`/auth/usuarios/${usuario.id}/papel`, formData);
 
     Notify.create({ type: 'positive', message: 'Papel atualizado com sucesso' });
     await carregarUsuarios();

@@ -96,9 +96,7 @@ const confirmarEnvio = ref(false)
 
 onMounted(async () => {
   try {
-    const res = await api.get('/me/colaborador', {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
+    const res = await api.get('/me/colaborador')
     nomeColaborador.value = res.data.nome
     codigoColaborador.value = res.data.code
   } catch {

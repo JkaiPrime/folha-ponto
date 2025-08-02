@@ -101,11 +101,7 @@ const columns: QTableColumn<Justificativa>[] = [
 async function carregarPendentes() {
   carregando.value = true
   try {
-    const res = await api.get('/justificativas/pendentes', {
-      headers: {
-        Authorization: `Bearer ${auth.token}`
-      }
-    })
+    const res = await api.get('/justificativas/pendentes')
     justificativas.value = res.data
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao carregar justificativas pendentes' })
