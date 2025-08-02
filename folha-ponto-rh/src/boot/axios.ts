@@ -10,7 +10,7 @@ import { useAuthStore } from 'src/stores/auth';
 
 ///baseURL: 'https://folha-ponto.onrender.com'
 const api = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: 'https://folha-ponto.onrender.com',
   withCredentials: true,
   headers: {
     Origin: 'http://localhost:9000' // ✅ garante header em todas as requisições
