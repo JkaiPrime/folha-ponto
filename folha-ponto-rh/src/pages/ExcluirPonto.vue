@@ -1,211 +1,147 @@
 <template>
   <q-page class="q-pa-md">
-    <q-card>
+    <q-card class="q-pa-md q-mx-auto" style="max-width: 800px;">
       <q-card-section>
-        <div class="text-h6">Excluir ponto de colaborador</div>
+        <div class="text-h6">Excluir Registros de Ponto</div>
       </q-card-section>
 
-      <q-separator />
+      <q-card-section class="q-gutter-md">
+        <q-input
+          filled
+          v-model="mesSelecionado"
+          label="Selecione o Mês"
+          type="text"
+          mask="####-##"
+          hint="Formato: YYYY-MM"
+        />
 
-      <q-card-section>
-        <div class="q-gutter-md">
-          <q-select
-            v-model="colaboradorSelecionado"
-            :options="colaboradores"
-            option-value="id"
-            option-label="nome"
-            emit-value
-            map-options
-            label="Selecionar colaborador"
-            filled
-            dense
-            @update:model-value="carregarPontosIniciais"
-          />
-
-          <q-input
-            v-model="mesSelecionado"
-            label="Selecionar mês"
-            filled
-            dense
-          >
-            <template #append>
-              <q-icon name="event" class="cursor-pointer">
-                <q-popup-proxy>
-                  <q-date
-                    v-model="mesSelecionado"
-                    mask="YYYY-MM"
-                    minimal
-                    default-view="Months"
-                    emit-immediately
-                    @update:model-value="buscarPontos"
-                  />
-                </q-popup-proxy>
-              </q-icon>
-            </template>
-          </q-input>
-        </div>
+        <q-btn label="Buscar pontos" color="primary" @click="buscarPontos" />
       </q-card-section>
 
-      <q-separator />
+      <q-card-section v-if="pontos.length">
+        <q-markup-table flat bordered>
+          <thead>
+            <tr>
+              <th class="text-center">Data</th>
+              <th class="text-center">Entrada</th>
+              <th class="text-center">Saída Almoço</th>
+              <th class="text-center">Volta Almoço</th>
+              <th class="text-center">Saída</th>
+              <th class="text-center">Alterado por</th>
+              <th class="text-center">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in pontos" :key="p.id">
+              <td class="text-center">{{ p.data }}</td>
+              <td class="text-center">{{ formatar(p.entrada) }}</td>
+              <td class="text-center">{{ formatar(p.saida_almoco) }}</td>
+              <td class="text-center">{{ formatar(p.volta_almoco) }}</td>
+              <td class="text-center">{{ formatar(p.saida) }}</td>
+              <td class="text-center">{{ p.alterado_por?.nome || '-' }}</td>
+              <td class="text-center">
+                <q-btn
+                  dense
+                  flat
+                  icon="delete"
+                  color="negative"
+                  @click="confirmarExclusao(p.id)"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </q-markup-table>
+      </q-card-section>
 
-      <q-card-section>
-        <q-table
-          :rows="registros"
-          :columns="columns"
-          row-key="id"
-          dense
-          flat
-          bordered
-        >
-          <template v-slot:body-cell-actions="props">
-            <q-td align="center">
-              <q-btn
-                icon="delete"
-                color="negative"
-                dense
-                flat
-                @click="removerPonto(props.row.id)"
-              />
-            </q-td>
-          </template>
-        </q-table>
+      <q-card-section v-else class="text-center text-grey q-mt-lg">
+        Nenhum registro de ponto encontrado para o período selecionado.
       </q-card-section>
     </q-card>
+
+    <!-- Diálogo de Confirmação -->
+    <q-dialog v-model="mostrarDialogo">
+      <q-card>
+        <q-card-section class="text-h6">
+          Confirmar Exclusão
+        </q-card-section>
+        <q-card-section>
+          Tem certeza de que deseja excluir este registro de ponto? Esta ação é irreversível.
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancelar" color="grey" v-close-popup />
+          <q-btn flat label="Excluir" color="negative" @click="removerPonto" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { api } from 'boot/axios';
-import { Notify } from 'quasar';
-import type { QTableColumn } from 'quasar';
+import { ref } from 'vue'
+import { api } from 'boot/axios'
+import { Notify } from 'quasar'
+import dayjs from 'dayjs'
+
+const mesSelecionado = ref(dayjs().format('YYYY-MM'))
+const pontos = ref<Registro[]>([])
+const mostrarDialogo = ref(false)
+const pontoSelecionado = ref<number | null>(null)
 
 interface Registro {
-  id: number;
-  data?: string;
-  entrada?: string;
-  saida_almoco?: string;
-  volta_almoco?: string;
-  saida?: string;
+  id: number
+  data: string
+  entrada: string | null
+  saida_almoco: string | null
+  volta_almoco: string | null
+  saida: string | null
+  justificativa?: string
+  arquivo?: string
+  alterado_por?: { id: number, nome: string } | null
+  avaliador?: { id: number, nome: string } | null
 }
 
-interface Colaborador {
-  id: number;
-  nome: string;
-}
-
-const colaboradores = ref<Colaborador[]>([]);
-const colaboradorSelecionado = ref<string | null>(null);
-const mesSelecionado = ref<string | null>(null);
-const registros = ref<Registro[]>([]);
-
-function formatDate(iso: string | undefined): string {
-  if (!iso) return '-';
-  const date = new Date(iso);
-  return date.toLocaleDateString('pt-BR');
-}
-
-function formatTime(iso: string | undefined): string {
-  if (!iso) return '-';
-  const date = new Date(iso);
-  return date.toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  });
-}
-
-const columns: QTableColumn<Registro>[] = [
-  { name: 'data', label: 'Data', field: row => formatDate(row.data), align: 'center' },
-  { name: 'entrada', label: 'Entrada', field: row => formatTime(row.entrada), align: 'center' },
-  { name: 'saida_almoco', label: 'Saída Almoço', field: row => formatTime(row.saida_almoco), align: 'center' },
-  { name: 'volta_almoco', label: 'Volta Almoço', field: row => formatTime(row.volta_almoco), align: 'center' },
-  { name: 'saida', label: 'Saída', field: row => formatTime(row.saida), align: 'center' },
-  { name: 'actions', label: 'Ações', field: () => '', align: 'center' }
-];
-
-async function carregarColaboradores() {
-  try {
-    const res = await api.get('/colaboradores', { withCredentials: true });
-    colaboradores.value = res.data;
-    console.log('[DEBUG] Colaboradores carregados:', colaboradores.value);
-  } catch {
-    Notify.create({ type: 'negative', message: 'Erro ao carregar colaboradores' });
-  }
+function formatar(data: string | null | undefined) {
+  return data ? dayjs(data).format('HH:mm') : '-'
 }
 
 async function buscarPontos() {
-  if (!colaboradorSelecionado.value || !mesSelecionado.value) {
-    console.warn('[DEBUG] Colaborador ou mês não selecionado');
-    return;
-  }
-
-  const [ano, mes] = mesSelecionado.value.split('-');
-  const inicio = `${ano}-${mes}-01`;
-  const fim = new Date(Number(ano), Number(mes), 0).toISOString().split('T')[0];
-
-  console.log('[DEBUG] Buscando pontos:', { colaborador_id: colaboradorSelecionado.value, inicio, fim });
-
   try {
+    const colaboradorRes = await api.get('/me/colaborador', { withCredentials: true });
+    const colaboradorId = colaboradorRes.data.id;
+
+    const [ano, mes] = mesSelecionado.value.split('-');
+    const inicio = `${ano}-${mes}-01`;
+    const fim = new Date(Number(ano), Number(mes), 0).toISOString().split('T')[0];
+
     const res = await api.get('/pontos/por-data', {
-      params: { colaborador_id: colaboradorSelecionado.value, inicio, fim },
+      params: { colaborador_id: colaboradorId, inicio, fim },
       withCredentials: true
     });
-    registros.value = res.data;
-    console.log('[DEBUG] Pontos carregados:', registros.value);
-  } catch {
-    Notify.create({ type: 'negative', message: 'Erro ao buscar pontos do colaborador' });
-    registros.value = [];
-  }
-}
 
-async function buscarPontosHoje() {
-  if (!colaboradorSelecionado.value) return;
-  try {
-    const res = await api.get(`/pontos/hoje`, {
-      params: { colaborador_id: colaboradorSelecionado.value },
-      withCredentials: true
-    });
-    if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-      registros.value = res.data;
-      console.log('[DEBUG] Pontos de hoje carregados:', registros.value);
-    }
+    pontos.value = res.data;
   } catch (error) {
-    console.error('Erro ao buscar pontos de hoje:', error);
+    console.error('Erro ao buscar pontos:', error);
+    pontos.value = [];
+    Notify.create({ type: 'negative', message: 'Erro ao buscar seus pontos' });
   }
 }
 
-async function carregarPontosIniciais() {
-  if (!colaboradorSelecionado.value) return;
-
-  // Primeiro tenta buscar pontos do dia
-  await buscarPontosHoje();
-
-  // Se não houver pontos do dia, busca do mês
-  if (registros.value.length === 0) {
-    await buscarPontos();
-  }
+function confirmarExclusao(id: number) {
+  pontoSelecionado.value = id
+  mostrarDialogo.value = true
 }
 
-async function removerPonto(id: number) {
-  if (!confirm('Tem certeza que deseja excluir este ponto?')) return;
+async function removerPonto() {
+  if (!pontoSelecionado.value) return
 
   try {
-    await api.delete(`/pontos/${id}`, { withCredentials: true });
-    Notify.create({ type: 'positive', message: 'Ponto excluído com sucesso' });
-    await carregarPontosIniciais();
-  } catch {
-    Notify.create({ type: 'negative', message: 'Erro ao excluir ponto' });
+    await api.delete(`/pontos/${pontoSelecionado.value}`, { withCredentials: true })
+    Notify.create({ type: 'positive', message: 'Registro excluído com sucesso' })
+    mostrarDialogo.value = false
+    await buscarPontos()
+  } catch (error) {
+    console.error('Erro ao excluir ponto:', error)
+    Notify.create({ type: 'negative', message: 'Erro ao excluir ponto' })
   }
 }
-
-onMounted(async () => {
-  await carregarColaboradores();
-
-  // Define mês atual automaticamente
-  const hoje = new Date();
-  const ano = hoje.getFullYear();
-  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-  mesSelecionado.value = `${ano}-${mes}`;
-});
 </script>
