@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field , model_validator
 from datetime import date, datetime
 from typing import Optional
 from enum import Enum
@@ -38,6 +38,17 @@ class UserResponse(UserBase):
     locked: bool
     class Config:
         from_attributes = True
+        
+class UsuarioUpdate(BaseModel):
+    nome: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+class PasswordTempRequest(BaseModel):
+    nova_senha: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    nova_senha: str
 
 
        
@@ -53,7 +64,6 @@ class RegistroComColaboradorResponse(BaseModel):
     colaborador: Optional[ColaboradorResponse] = None
     alterado_por: Optional[UserResponse] = None
 
-    # 🔽 Campos adicionais
     status: Optional[str] = None
     avaliador: Optional[UserResponse] = None
 
@@ -101,6 +111,44 @@ class RegistroPontoResponse(BaseModel):
         from_attributes = True
 
 
+class RegistroPontoManualCreate(BaseModel):
+    code: str
+    data: date
+    entrada: Optional[datetime] = None
+    saida_almoco: Optional[datetime] = None
+    volta_almoco: Optional[datetime] = None
+    saida: Optional[datetime] = None
+    justificativa: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validar_horarios(self):
+        """
+        Regras:
+        - Pelo menos um horário deve ser informado.
+        - Se informados, a ordem deve ser entrada ≤ saída almoço ≤ volta almoço ≤ saída.
+        """
+        if not any([self.entrada, self.saida_almoco, self.volta_almoco, self.saida]):
+            raise ValueError(
+                "Informe pelo menos um horário (entrada, saída almoço, volta almoço ou saída)."
+            )
+
+        def ok(a: Optional[datetime], b: Optional[datetime]) -> bool:
+            return a is None or b is None or a <= b
+
+        if not (
+            ok(self.entrada, self.saida_almoco)
+            and ok(self.saida_almoco, self.volta_almoco)
+            and ok(self.volta_almoco, self.saida)
+        ):
+            raise ValueError(
+                "A ordem dos horários está inconsistente: "
+                "entrada ≤ saída almoço ≤ volta almoço ≤ saída."
+            )
+        return self
+
+
+# — tokens —
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -108,6 +156,13 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+class TokenRefresh(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
 
 # — Justificativas —
 class JustificativaCreate(BaseModel):
@@ -138,13 +193,3 @@ class JustificativaResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
-
-class TokenRefresh(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str

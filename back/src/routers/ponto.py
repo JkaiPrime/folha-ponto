@@ -1,14 +1,16 @@
-from typing import List
+from typing import List, Optional
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from datetime import date, datetime
 from src import models, crud, schemas
 from src.database import SessionLocal
 from src.routers.auth import apenas_funcionario, apenas_gestao, get_current_user
-from src.schemas import RegistroComColaboradorResponse
+from src.schemas import RegistroComColaboradorResponse, RegistroPontoManualCreate
 from src.utils.timezone import get_hora_brasilia
 
 router = APIRouter(prefix="/pontos", tags=["pontos"])
+BR_TZ = ZoneInfo("America/Sao_Paulo") 
 
 def get_db():
     db = SessionLocal()
@@ -16,6 +18,14 @@ def get_db():
         yield db
     finally:
         db.close()
+        
+
+def _ensure_tz(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        return dt.replace(tzinfo=BR_TZ)
+    return dt.astimezone(BR_TZ)
 
 @router.post(
     "/bater-ponto",
@@ -39,6 +49,54 @@ def bater_ponto(
 
     return crud.registrar_ponto(db, ponto.colaborador_id, hora_brasilia)
 
+@router.post(
+    "/inserir-manual",
+    response_model=schemas.RegistroPontoResponse,
+    summary="Inserir/atualizar ponto manual (somente gestão)"
+)
+def inserir_manual(
+    payload: RegistroPontoManualCreate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(apenas_gestao)
+):
+    # Localiza colaborador pelo code
+    colaborador = (
+        db.query(models.Colaborador)
+        .filter(models.Colaborador.code == payload.code)
+        .first()
+    )
+    if not colaborador:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado pelo code.")
+
+    # Normaliza timezone para Brasília
+    entrada = _ensure_tz(payload.entrada)
+    saida_almoco = _ensure_tz(payload.saida_almoco)
+    volta_almoco = _ensure_tz(payload.volta_almoco)
+    saida = _ensure_tz(payload.saida)
+
+    # Auditoria
+    crud.registrar_auditoria(
+        db,
+        user.id,
+        action="inserir_ponto_manual",
+        endpoint="/pontos/inserir-manual",
+        detail=f"code={payload.code} data={payload.data.isoformat()} "
+               f"entrada={entrada} saida_almoco={saida_almoco} volta_almoco={volta_almoco} saida={saida}"
+    )
+
+    # Insere/atualiza
+    reg = crud.inserir_ponto_manual(
+        db=db,
+        colaborador_id=colaborador.id,
+        data=payload.data,
+        entrada=entrada,
+        saida_almoco=saida_almoco,
+        volta_almoco=volta_almoco,
+        saida=saida,
+        user_id=user.id,
+        justificativa=payload.justificativa,
+    )
+    return reg
 
 @router.get(
     "",

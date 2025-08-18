@@ -1,3 +1,13 @@
 {
-  "extends": "./.quasar/tsconfig.json"
+  "extends": "./.quasar/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "node",          // <- sobrescreve o "classic"
+    "resolveJsonModule": true,              // <- permitido com bundler/node
+    "lib": ["ESNext", "DOM"],
+    "types": ["vite/client", "quasar"],
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true
+  }
 }

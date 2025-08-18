@@ -13,13 +13,19 @@ from src import models, crud, schemas
 from src.database import SessionLocal
 from src.utils.rate_limiter import limiter
 from fastapi import Request
+from pydantic import BaseModel, EmailStr  # ADD
+
 
 load_dotenv()
 
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:9000")
 SECRET_KEY = os.getenv("SECRET_KEY", "Minha KeySuperS@cret!!@31231")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 25))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 1))
+PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", 30))
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -82,6 +88,19 @@ def verifica_token_acesso(token: str = Depends(oauth2_scheme)):
 #    return user
 
 
+def create_password_reset_token(email: str) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
+    payload = {"sub": email, "action": "pwd_reset", "exp": expire}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def set_user_password(db: Session, user: models.User, new_password: str) -> None:
+    user.hashed_password = pwd_context.hash(new_password)
+    user.failed_attempts = 0
+    user.locked = False
+    user.locked_until = None
+    db.commit()
+    db.refresh(user)
+
 def get_current_user(
     db: Session = Depends(get_db),
     access_token: str = Cookie(None)
@@ -127,6 +146,8 @@ def apenas_rh(user: models.User = Depends(get_current_user)):
     if user.role != "rh":
         raise HTTPException(status_code=403, detail="Acesso restrito ao RH")
     return user
+
+
 '''
 @limiter.limit("14/minute")
 @router.post("/login", response_model=schemas.TokenRefresh)
@@ -269,6 +290,92 @@ def signup(
         detail=f"Usuário criado: {db_user.email}"
     )
     return db_user
+
+
+
+@router.patch("/usuarios/{id}")
+def atualizar_usuario(
+    id: int,
+    payload: schemas.UsuarioUpdate,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(apenas_gestao),
+):
+    user = db.query(models.User).filter_by(id=id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "email" in data and data["email"] != user.email:
+        # evita e-mail duplicado
+        existe = db.query(models.User).filter(models.User.email == data["email"]).first()
+        if existe:
+            raise HTTPException(status_code=409, detail="Email já está em uso")
+    for k, v in data.items():
+        setattr(user, k, v)
+
+    db.commit()
+    db.refresh(user)
+    crud.registrar_auditoria(db, user.id, action="atualizar_usuario", endpoint=f"/auth/usuarios/{id}", detail=str(data))
+    return {"id": user.id, "nome": user.nome, "email": user.email, "role": user.role, "locked": user.locked}
+
+@router.post("/usuarios/{id}/password-temporaria")
+def definir_senha_temporaria(
+    id: int,
+    req: schemas.PasswordTempRequest,
+    db: Session = Depends(get_db),
+    gestor: models.User = Depends(apenas_gestao),
+):
+    user = db.query(models.User).filter_by(id=id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    set_user_password(db, user, req.nova_senha)
+    crud.registrar_auditoria(db, gestor.id, action="definir_senha_temporaria",
+                             endpoint=f"/auth/usuarios/{id}/password-temporaria", detail="")
+    return {"ok": True}
+
+
+@router.post("/usuarios/{id}/reset-link")
+def gerar_reset_link(
+    id: int,
+    db: Session = Depends(get_db),
+    gestor: models.User = Depends(apenas_gestao),
+):
+    user = db.query(models.User).filter_by(id=id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    token = create_password_reset_token(user.email)
+    reset_url = f"{FRONTEND_URL}/reset-password?token={token}"
+
+    crud.registrar_auditoria(db, gestor.id, action="gerar_reset_link",
+                             endpoint=f"/auth/usuarios/{id}/reset-link", detail=f"email={user.email}")
+    return {"reset_url": reset_url}
+
+@router.post("/password/reset")
+def resetar_senha(
+    req: schemas.ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        payload = jwt.decode(req.token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("action") != "pwd_reset":
+            raise HTTPException(status_code=400, detail="Token inválido para reset")
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=400, detail="Token sem usuário")
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token de reset expirado")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Token inválido")
+
+    user = crud.get_user(db, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    set_user_password(db, user, req.nova_senha)
+    crud.registrar_auditoria(db, user.id, action="resetar_senha", endpoint="/auth/password/reset", detail="via token")
+    return {"ok": True}
 
 
 @router.get("/usuarios", response_model=List[schemas.UserResponse])
