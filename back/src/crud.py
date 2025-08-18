@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from passlib.context import CryptContext
@@ -153,6 +154,56 @@ def registrar_ponto(db: Session, colaborador_code: str, hora_brasilia: datetime)
     db.refresh(reg)
     return reg
 
+def inserir_ponto_manual(
+    db: Session,
+    colaborador_id: int,
+    data: date,
+    *,
+    entrada: Optional[datetime] = None,
+    saida_almoco: Optional[datetime] = None,
+    volta_almoco: Optional[datetime] = None,
+    saida: Optional[datetime] = None,
+    user_id: Optional[int] = None,
+    justificativa: Optional[str] = None,
+) -> models.RegistroPonto:
+    # Tenta achar registro existente do dia
+    reg = (
+        db.query(models.RegistroPonto)
+        .filter(models.RegistroPonto.colaborador_id == colaborador_id)
+        .filter(models.RegistroPonto.data == data)
+        .first()
+    )
+
+    if reg is None:
+        reg = models.RegistroPonto(
+            colaborador_id=colaborador_id,
+            data=data,
+            entrada=entrada,
+            saida_almoco=saida_almoco,
+            volta_almoco=volta_almoco,
+            saida=saida,
+            justificativa=justificativa or None,
+            alterado_por_id=user_id,
+        )
+        db.add(reg)
+    else:
+        # Atualiza campos informados (sem zerar os não enviados)
+        if entrada is not None:
+            reg.entrada = entrada
+        if saida_almoco is not None:
+            reg.saida_almoco = saida_almoco
+        if volta_almoco is not None:
+            reg.volta_almoco = volta_almoco
+        if saida is not None:
+            reg.saida = saida
+        if justificativa is not None:
+            reg.justificativa = justificativa
+        reg.alterado_por_id = user_id
+
+    db.commit()
+    db.refresh(reg)
+    return reg
+
 
 
 def list_pontos(db: Session):
@@ -188,7 +239,7 @@ def delete_ponto(db: Session, id: int):
     return {"message": "Registro de ponto excluído com sucesso"}
 
 
-
+# —— Justificativas —— #
 def salvar_justificativa(db: Session, justificativa: schemas.JustificativaCreate) -> models.Justificativa:
     colaborador = db.query(models.Colaborador).filter_by(code=str(justificativa.colaborador_id)).first()
     if not colaborador:
