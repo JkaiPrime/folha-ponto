@@ -1,28 +1,20 @@
-from pydantic import BaseModel, EmailStr, Field , model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, Union
 from enum import Enum
-
-
+import re
 
 # — Colaborador: código de 6 dígitos numéricos —
 class ColaboradorBase(BaseModel):
-    code: str = Field(
-        ...,
-        min_length=6,
-        max_length=6,
-        pattern=r"^\d{6}$"
-    )
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
     nome: Optional[str] = None
 
 class ColaboradorResponse(BaseModel):
     id: int
     nome: str
     code: str
-
     class Config:
         from_attributes = True
-        
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -38,7 +30,7 @@ class UserResponse(UserBase):
     locked: bool
     class Config:
         from_attributes = True
-        
+
 class UsuarioUpdate(BaseModel):
     nome: Optional[str] = None
     email: Optional[EmailStr] = None
@@ -51,7 +43,6 @@ class ResetPasswordRequest(BaseModel):
     nova_senha: str
 
 
-       
 class RegistroComColaboradorResponse(BaseModel):
     id: Optional[int]
     data: date
@@ -74,17 +65,27 @@ class ColaboradorCreate(ColaboradorBase):
     email_usuario: Optional[EmailStr] = None
 
 
-
-
 # — Registro de Ponto —
+# Agora aceita:
+# - int (id do colaborador),
+# - str (code de 6 dígitos),
+# - None (usa usuário logado para resolver).
 class RegistroPontoBase(BaseModel):
-    colaborador_id: str = Field(
-        ...,
-        min_length=6,
-        max_length=6,
-        pattern=r"^\d{6}$"
-    )
+    colaborador_id: Optional[Union[int, str]] = None
 
+    @model_validator(mode="after")
+    def _validar_colab(self):
+        c = self.colaborador_id
+        if c is None:
+            return self  # OK: será resolvido pela sessão
+        if isinstance(c, int):
+            if c <= 0:
+                raise ValueError("colaborador_id (int) deve ser positivo.")
+            return self
+        # string -> precisa ser code de 6 dígitos
+        if not re.fullmatch(r"^\d{6}$", c):
+            raise ValueError("colaborador_id (str) deve ser um code de 6 dígitos.")
+        return self
 
 class RegistroPontoCreate(RegistroPontoBase):
     pass
@@ -105,7 +106,7 @@ class RegistroPontoResponse(BaseModel):
     justificativa: Optional[str] = None
     arquivo: Optional[str] = None
     colaborador: Optional[ColaboradorResponse] = None
-    alterado_por: Optional[UserResponse] = None  # <-- Adicionado aqui
+    alterado_por: Optional[UserResponse] = None
 
     class Config:
         from_attributes = True
@@ -122,11 +123,6 @@ class RegistroPontoManualCreate(BaseModel):
 
     @model_validator(mode="after")
     def _validar_horarios(self):
-        """
-        Regras:
-        - Pelo menos um horário deve ser informado.
-        - Se informados, a ordem deve ser entrada ≤ saída almoço ≤ volta almoço ≤ saída.
-        """
         if not any([self.entrada, self.saida_almoco, self.volta_almoco, self.saida]):
             raise ValueError(
                 "Informe pelo menos um horário (entrada, saída almoço, volta almoço ou saída)."
@@ -148,7 +144,6 @@ class RegistroPontoManualCreate(BaseModel):
 
 
 # — tokens —
-
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -163,6 +158,7 @@ class TokenRefresh(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
+
 
 # — Justificativas —
 class JustificativaCreate(BaseModel):

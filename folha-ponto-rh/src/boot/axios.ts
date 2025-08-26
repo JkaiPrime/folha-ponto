@@ -10,7 +10,8 @@ declare module 'axios' {
     __skipAuthRedirect?: boolean;
   }
 }
-
+//baseURL: 'http://localhost:8000',
+//baseURL: 'https://folha-ponto.onrender.com',
 const api = axios.create({
   baseURL: 'https://folha-ponto.onrender.com',
   withCredentials: true,

@@ -3,19 +3,12 @@
     <!-- HEADER -->
     <q-header v-if="mostrarMenu" elevated class="bg-primary text-white">
       <q-toolbar>
-        <q-btn
-          flat dense round icon="menu"
-          aria-label="Abrir menu lateral"
-          @click="drawer = !drawer"
-        />
-
+        <q-btn flat dense round icon="menu" aria-label="Abrir menu lateral" @click="drawer = !drawer" />
         <q-toolbar-title class="row items-center">
           <q-icon name="access_time" class="q-mr-sm" />
           <span>PontoX - Folha Ponto</span>
         </q-toolbar-title>
-
         <q-space />
-
         <q-btn flat dense icon="logout" label="Sair" @click="logout" class="q-ml-sm" />
       </q-toolbar>
     </q-header>
@@ -35,17 +28,54 @@
         <!-- Cartão com nome, email e cargo -->
         <div class="q-pa-md">
           <div class="drawer-card">
-            <q-avatar size="40px" class="text-primary bg-primary-1">
-              {{ firstLetter }}
-            </q-avatar>
-            <div class="q-ml-md column">
-              <div class="text-body1 text-weight-medium ellipsis">{{ displayName }}</div>
-              <div class="text-caption text-grey-7 ellipsis">{{ displayEmail }}</div>
-              <div class="text-caption text-grey-6">{{ roleLabel }}</div>
+            <div class="row items-center no-wrap">
+              <template v-if="loadingMe">
+                <q-skeleton type="QAvatar" size="40px" />
+                <div class="q-ml-md" style="min-width: 0">
+                  <q-skeleton type="text" width="140px" />
+                  <q-skeleton type="text" width="180px" />
+                  <q-skeleton type="text" width="80px" />
+                </div>
+              </template>
+
+              <template v-else>
+                <q-avatar size="40px" class="text-primary bg-primary-1">
+                  {{ firstLetter }}
+                </q-avatar>
+
+                <div class="q-ml-md column" style="min-width: 0">
+                  <div class="row items-center no-wrap">
+                    <div class="text-body1 text-weight-medium ellipsis">
+                      {{ displayName }}
+                    </div>
+                    <!--
+                    <q-badge v-if="displayCode" class="q-ml-sm" outline align="middle">
+                      {{ displayCode }}
+                    </q-badge>
+                    -->
+                  </div>
+                  <!--
+                  <div class="text-caption text-grey-7 ellipsis">
+                    {{ displayEmail }}
+                  </div>
+                  -->
+                  <div class="row items-center q-gutter-xs q-mt-xs">
+                    <q-badge :color="roleColor" text-color="white" outline class="text-caption">
+                      {{ roleLabel }}
+                    </q-badge>
+                    <!--
+                    <q-badge v-if="displayId !== null" color="grey-4" text-color="dark" outline class="text-caption">
+                      ID: {{ displayId }}
+                    </q-badge>
+                    -->
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </div>
 
+        <!-- MENU -->
         <q-list padding class="q-pt-none">
           <!-- Funcionário -->
           <q-item clickable v-ripple :active="isActive('/bater-ponto')" @click="go('/bater-ponto')" class="nav-item">
@@ -69,7 +99,7 @@
           <q-separator spaced />
 
           <!-- Gestão -->
-          <template v-if="auth.role === 'gestao'">
+          <template v-if="isGestao">
             <q-item clickable v-ripple :active="isActive('/dashboard')" @click="go('/dashboard')" class="nav-item">
               <div class="active-indicator" />
               <q-item-section avatar><q-icon name="analytics" size="22px" /></q-item-section>
@@ -166,12 +196,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, getCurrentInstance } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from 'src/stores/auth'
-import type { AxiosInstance } from 'axios'
+import { api } from 'boot/axios'
+import { useAuthStore, type Role, type MeColaborador } from 'src/stores/auth'
 
-/** Rotas públicas (sem header/drawer e sem fetch do /me) */
+/** Rotas públicas (sem header/drawer) */
 const PUBLIC_PATHS = ['/', '/reset-password', '/reset-password-link'] as const
 
 const drawer = ref(false)
@@ -179,118 +209,91 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-/** Exibe header/drawer somente fora das rotas públicas */
-const isPublicRoute = computed<boolean>(() => {
-  // meta.public em qualquer nível
-  if (route.matched.some(r => r.meta?.public === true)) return true
-  // paths explícitos
-  return (PUBLIC_PATHS as readonly string[]).includes(route.path)
-})
+const isPublicRoute = computed<boolean>(() =>
+  route.matched.some(r => r.meta?.public === true) ||
+  (PUBLIC_PATHS as readonly string[]).includes(route.path)
+)
 const mostrarMenu = computed<boolean>(() => !isPublicRoute.value)
 
-/** Estado do “bem-vindo” */
-const displayName = ref<string>('Usuário')
-const displayEmail = ref<string>('')
-const roleFromMe = ref<string | null>(null)
+/** Estado local (fallback) */
+const loadingMe = ref(false)
+const meLocal = ref<Partial<MeColaborador>>({})
 
-/** Logger simples (ativo só em dev) */
-const DEBUG = import.meta.env.DEV
-function log (...args: unknown[]) {
-  if (DEBUG) console.log(...args)
-}
-
-/** Mapeia a role crua para rótulo amigável */
-function mapRoleLabel (r: string): string {
-  const v = (r || '').toLowerCase()
-  if (['gestao', 'admin', 'administrador'].includes(v)) return 'Gestão'
-  if (['funcionario', 'colaborador'].includes(v)) return 'Funcionário'
-  return r || 'Usuário'
-}
-
-const rawRole = computed(() => roleFromMe.value || auth.role || '')
-const roleLabel = computed(() => mapRoleLabel(rawRole.value))
+/** Preferimos STORE; local é só backup */
+const displayName = computed<string>(() =>
+  (auth.me?.nome && auth.me.nome.length > 0 ? auth.me.nome : (meLocal.value.nome ?? 'Usuário'))
+)
+/*
+const displayEmail = computed<string>(() =>
+  (auth.me?.email && auth.me.email.length > 0 ? auth.me.email : (meLocal.value.email ?? ''))
+)
+  */
+/*
+const displayCode = computed<string | null>(() =>
+  (auth.me?.code ?? meLocal.value.code ?? null) as string 
+)
+  */
+ /*
+const displayId = computed<number | null>(() => {
+  const idStore = auth.me?.id
+  const idLocal = meLocal.value.id
+  return (typeof idStore === 'number' ? idStore : (typeof idLocal === 'number' ? idLocal : null))
+})
+*/
+const roleRaw = computed<Role | null>(() => (auth.me?.role ?? auth.role ?? meLocal.value.role ?? null) as Role)
+const isGestao = computed<boolean>(() => {
+  const r = roleRaw.value
+  return r === 'gestao' || r === 'admin' || r === 'administrador'
+})
+const roleLabel = computed<string>(() => {
+  const r = roleRaw.value
+  if (r === 'gestao' || r === 'admin' || r === 'administrador') return 'Gestão'
+  if (r === 'funcionario') return 'Funcionário'
+  return 'Usuário'
+})
+const roleColor = computed<'primary' | 'secondary' | 'grey'>(() => {
+  const r = roleRaw.value
+  if (r === 'gestao' || r === 'admin' || r === 'administrador') return 'primary'
+  if (r === 'funcionario') return 'secondary'
+  return 'grey'
+})
 const firstLetter = computed(() => (displayName.value?.[0] || 'U').toUpperCase())
 
-/** Obtém Axios do boot ($api), se disponível */
-function getAxiosFromBoot(): AxiosInstance | null {
-  const inst = getCurrentInstance()
-  const gp = inst?.appContext.config.globalProperties as Record<string, unknown> | undefined
-  const candidate = gp?.$api
-  return (candidate && typeof candidate === 'object') ? (candidate as AxiosInstance) : null
+/** Garante que temos /me/colaborador no store; se não, busca e preenche ambos */
+async function ensureMe(): Promise<void> {
+  if (auth.userLoaded && auth.me?.nome && auth.me?.email) {
+    return
+  }
+  loadingMe.value = true
+  try {
+    const res = await api.get<Partial<MeColaborador>>('/me/colaborador', { withCredentials: true })
+    meLocal.value = res.data ?? {}
+    // Ao setar no store, NUNCA passa role: undefined (store já cuida disso)
+    auth.setMe(res.data ?? {})
+  } catch {
+    meLocal.value = {}
+  } finally {
+    loadingMe.value = false
+  }
 }
 
 onMounted(async () => {
-  // 🚫 Não toca em sessão nas rotas públicas
-  if (isPublicRoute.value) {
-    log('[MainLayout] rota pública, pulando fetch do usuário')
-    return
+  if (isPublicRoute.value) return
+
+  if (!auth.userLoaded) {
+    await auth.fetchUser().catch(() => void 0)
   }
-
-  // Carrega user do store se ainda não veio
-  if (!auth.userLoaded && typeof auth.fetchUser === 'function') {
-    try {
-      await auth.fetchUser()
-    } catch (err: unknown) {
-      console.warn('[MainLayout] erro ao carregar usuário:', err)
-    }
-  }
-
-  // Fallbacks
-  displayName.value = 'Usuário'
-  displayEmail.value = ''
-
-  log('[MainLayout] route.path:', route.path)
-  log('[MainLayout] auth info:', { role: auth.role, userLoaded: auth.userLoaded })
-
-  // Busca /me/colaborador
-  const api = getAxiosFromBoot()
-  log('[MainLayout] usando $api do boot?', Boolean(api))
-
-  try {
-    console.groupCollapsed('[MainLayout] GET /me/colaborador')
-
-    if (api) {
-      const res = await api.get('/me/colaborador')
-      log('status:', res.status)
-      log('data:', res.data)
-      const d: { nome?: string; email?: string; role?: string } = res.data ?? {}
-      if (d.nome) displayName.value = d.nome
-      if (d.email) displayEmail.value = d.email
-      if (d.role) roleFromMe.value = d.role
-    } else {
-      const res = await fetch('/me/colaborador', { credentials: 'include' })
-      log('status:', res.status)
-      const data: { nome?: string; email?: string; role?: string } = await res.json()
-      log('data:', data)
-      if (data.nome) displayName.value = data.nome
-      if (data.email) displayEmail.value = data.email
-      if (data.role) roleFromMe.value = data.role
-    }
-
-    log('após set:', {
-      displayName: displayName.value,
-      displayEmail: displayEmail.value,
-      rawRole: rawRole.value,
-      roleLabel: roleLabel.value
-    })
-    console.groupEnd()
-  } catch (err: unknown) {
-    console.groupCollapsed('[MainLayout] ERRO /me/colaborador')
-    log(err)
-    console.groupEnd()
-  }
+  await ensureMe()
 })
 
 function logout () {
   void auth.logout()
   void router.push('/')
 }
-
 function go (path: string) {
   drawer.value = false
   void router.replace(path)
 }
-
 function isActive (path: string) {
   return route.path === path || route.path.startsWith(path + '/')
 }
@@ -316,12 +319,8 @@ function isActive (path: string) {
   padding: 6px 8px;
   transition: background 0.15s ease, transform 0.05s ease;
 }
-.nav-item:hover {
-  background: rgba(0,0,0,0.04);
-}
-.nav-item:active {
-  transform: translateY(1px);
-}
+.nav-item:hover { background: rgba(0,0,0,0.04); }
+.nav-item:active { transform: translateY(1px); }
 
 /* Indicador ativo (faixa à esquerda) */
 .nav-item .active-indicator {
@@ -338,7 +337,4 @@ function isActive (path: string) {
   background: var(--q-color-primary);
   width: 4px;
 }
-
-/* Ajuste estético do chip no header */
-.bg-primary-10 { background: rgba(255,255,255,0.12); }
 </style>
