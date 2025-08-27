@@ -51,22 +51,11 @@
             <div class="col-6 col-sm-3">
               <div class="text-caption text-grey-7">Dias úteis considerados</div>
               <div class="text-h6">{{ diasUteisConsiderados }}</div>
-            </div><!--
-            <div class="col-6 col-sm-3">
-              <div class="text-caption text-grey-7">Total esperado (8h/dia)</div>
-              <div class="text-h6">{{ esperadoMesHHMM }}</div>
-            </div>-->
+            </div>
             <div class="col-6 col-sm-3">
               <div class="text-caption text-grey-7">Total trabalhado</div>
               <div class="text-h6">{{ totalMesHHMM }}</div>
-            </div><!--
-            <div class="col-6 col-sm-3">
-              <div class="text-caption text-grey-7">Saldo</div>
-              <q-chip :color="saldoColor" text-color="white" class="text-weight-medium text-subtitle1">
-                {{ saldoPrefix }}{{ saldoMesHHMM }}
-              </q-chip>
             </div>
-            -->
           </div>
           <div class="text-caption text-grey-6 q-mt-sm">
             * Contabiliza somente <strong>seg–sex</strong>. Se for o mês atual, considera até
@@ -126,8 +115,7 @@
                 :color="props.row._completo ? 'positive' : 'negative'"
                 :label="props.row._completo ? 'Completo' : 'Incompleto'"
                 outline
-              >
-              </q-badge>
+              />
               <q-tooltip v-if="!props.row._completo">
                 Faltando: {{ props.row._faltando.join(', ') }}
               </q-tooltip>
@@ -175,7 +163,7 @@ interface RegistroApi {
 }
 interface RegistroFront extends RegistroApi {
   _data_fmt: string;        // dd/MM/yyyy
-  _dia_fmt: string;         // QUI., SEX., ...
+  _dia_fmt: string;         // SEG., TER., ...
   _entrada_fmt: string;     // HH:mm
   _salm_fmt: string;        // HH:mm
   _valm_fmt: string;        // HH:mm
@@ -214,6 +202,20 @@ function toLocalDate(s?: string | null): Date | null {
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
+
+/** Evita shift de fuso quando a API envia "YYYY-MM-DD" */
+function parseDateOnlyLocal(s?: string | null): Date | null {
+  if (!s) return null;
+  if (ISO_DATE_RE.test(s)) {
+    const [yStr, mStr, dStr] = s.split('-') as [string, string, string];
+    const y = parseInt(yStr, 10);
+    const m = parseInt(mStr, 10);
+    const d = parseInt(dStr, 10);
+    return new Date(y, m - 1, d); // meia-noite local
+  }
+  return toLocalDate(s);
+}
+
 function brDateFromIsoDateOnly(s?: string | null): string {
   if (!s) return '-';
   if (ISO_DATE_RE.test(s)) {
@@ -223,14 +225,20 @@ function brDateFromIsoDateOnly(s?: string | null): string {
   const d = toLocalDate(s);
   return d ? d.toLocaleDateString('pt-BR') : '-';
 }
+
 function fmtHora(iso?: IsoStr): string {
   if (!iso) return '-';
   const d = toLocalDate(iso);
   if (!d) return '-';
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' });
+  return d.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'America/Sao_Paulo'
+  });
 }
 
-/** Total diário em minutos: (saida-entrada) - pausa almoço (se existir) */
+/** Total diário em minutos: (saida-entrada) - pausa almoço (se existir as duas batidas) */
 function calcMinDia(reg: { entrada?: IsoStr; saida?: IsoStr; saida_almoco?: IsoStr; volta_almoco?: IsoStr; }): number {
   const entrada = toLocalDate(reg.entrada || null);
   const saida   = toLocalDate(reg.saida   || null);
@@ -244,30 +252,38 @@ function calcMinDia(reg: { entrada?: IsoStr; saida?: IsoStr; saida_almoco?: IsoS
   return Math.max(0, Math.round(ms / 60000));
 }
 
-/* ===== Completo / Incompleto =====
-   Regras:
-   - "Completo" = tem Entrada e Saída (almoço opcional) → cobre estagiário (2 batidas)
-   - "Incompleto" = faltando Entrada ou Saída.
-   Tooltip lista o que estiver faltando.
-*/
+/* ===== Completo / Incompleto ===== */
 function completenessInfo(r: RegistroApi): { completo: boolean; faltando: string[] } {
   const faltando: string[] = [];
   if (!r.entrada) faltando.push('Entrada');
   if (!r.saida)   faltando.push('Saída');
-  // almoço é opcional; se quiser marcar também: descomente abaixo
-  // if (!r.saida_almoco) faltando.push('Saída almoço');
-  // if (!r.volta_almoco) faltando.push('Volta almoço');
   return { completo: faltando.length === 0, faltando };
+}
+
+/* Utils para exibição de totais */
+function minutesToHHMM(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+function minutesToHHMMSS(min: number): string {
+  return `${minutesToHHMM(min)}:00`;
 }
 
 /* ===== Normalização ===== */
 function normalize(r: RegistroApi): RegistroFront {
   const totalMin = calcMinDia(r);
   const { completo, faltando } = completenessInfo(r);
+
+  const dOnlyLocal = parseDateOnlyLocal(r.data); // <- usa data local segura
+  const diaFmt = dOnlyLocal
+    ? dOnlyLocal.toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase()
+    : '-';
+
   return {
     ...r,
     _data_fmt:   brDateFromIsoDateOnly(r.data),
-    _dia_fmt:    (toLocalDate(r.data)?.toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase() ?? '-'),
+    _dia_fmt:    diaFmt,
     _entrada_fmt: fmtHora(r.entrada),
     _salm_fmt:    fmtHora(r.saida_almoco),
     _valm_fmt:    fmtHora(r.volta_almoco),
@@ -277,15 +293,6 @@ function normalize(r: RegistroApi): RegistroFront {
     _completo:    completo,
     _faltando:    faltando
   };
-}
-
-function minutesToHHMM(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-function minutesToHHMMSS(min: number): string {
-  return `${minutesToHHMM(min)}:00`;
 }
 
 /* ===== API ===== */
@@ -323,8 +330,10 @@ async function buscarPontos(): Promise<void> {
 /* ===== Watch: busca automática ao trocar mês ===== */
 watch(mesSelecionado, () => { void buscarPontos(); });
 
-/* ===== Totais e saldo (8h/dia) ===== */
-//const JORNADA_ALVO_MIN = 8 * 60;
+/* ===== Totais ===== */
+const totalMesMin     = computed(() => registros.value.reduce((acc, r) => acc + r._total_min, 0));
+const totalMesHHMM    = computed(() => minutesToHHMM(totalMesMin.value));
+const totalMesHHMMSS  = computed(() => minutesToHHMMSS(totalMesMin.value));
 
 function countBusinessDaysOfMonth(yyyy: number, mm1to12: number, limitToToday = true): number {
   const first = new Date(yyyy, mm1to12 - 1, 1);
@@ -342,10 +351,6 @@ function countBusinessDaysOfMonth(yyyy: number, mm1to12: number, limitToToday = 
   return count;
 }
 
-const totalMesMin     = computed(() => registros.value.reduce((acc, r) => acc + r._total_min, 0));
-const totalMesHHMM    = computed(() => minutesToHHMM(totalMesMin.value));
-const totalMesHHMMSS  = computed(() => minutesToHHMMSS(totalMesMin.value));
-
 const diasUteisConsiderados = computed(() => {
   if (!mesSelecionado.value) return 0;
   const [yStr, mStr] = mesSelecionado.value.split('-');
@@ -353,13 +358,6 @@ const diasUteisConsiderados = computed(() => {
   if (!y || !m) return 0;
   return countBusinessDaysOfMonth(y, m, true);
 });
-
-//const esperadoMesMin    = computed(() => diasUteisConsiderados.value * JORNADA_ALVO_MIN);
-//const esperadoMesHHMM   = computed(() => minutesToHHMM(esperadoMesMin.value));
-//const saldoMesMin       = computed(() => totalMesMin.value - esperadoMesMin.value);
-//const saldoMesHHMM      = computed(() => minutesToHHMM(Math.abs(saldoMesMin.value)));
-//const saldoPrefix       = computed(() => (saldoMesMin.value >= 0 ? '+' : '-'));
-//const saldoColor        = computed(() => (saldoMesMin.value > 0 ? 'positive' : (saldoMesMin.value < 0 ? 'negative' : 'grey')));
 
 const limiteContagemLabel = computed(() => {
   if (!mesSelecionado.value) return '';
