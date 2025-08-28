@@ -13,7 +13,7 @@ declare module 'axios' {
 //baseURL: 'http://localhost:8000',
 //baseURL: 'https://folha-ponto.onrender.com',
 const api = axios.create({
-  baseURL: 'https://folha-ponto.onrender.com',
+  baseURL: 'http://localhost:8000',
   withCredentials: true,
 });
 

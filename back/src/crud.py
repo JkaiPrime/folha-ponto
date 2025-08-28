@@ -1,22 +1,35 @@
 from datetime import date, datetime, timedelta
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+
 from src.utils.timezone import get_hora_brasilia
-
-
 from . import models, schemas
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
-
 MAX_TENTATIVAS = 3
 TEMPO_BLOQUEIO_MINUTOS = 15
 
+# ------------------ Normalização ------------------
+CARGO_PLACEHOLDER = "Não Definido"
+
+def normalize_cargo(value: Optional[str]) -> str:
+    """
+    Retorna um cargo válido para persistência:
+    - Se None, vazio ou equivalente a 'Não Definido', retorna o placeholder.
+    - Caso contrário, retorna o texto aparado.
+    Obs.: Este helper assume que users.cargo é NOT NULL. Se tornar nullable,
+    pode-se retornar None aqui quando desejado.
+    """
+    if value is None:
+        return CARGO_PLACEHOLDER
+    v = value.strip()
+    if v == "" or v.lower() in {"não definido", "nao definido", "não-definido", "nao-definido"}:
+        return CARGO_PLACEHOLDER
+    return v
 
 # —— Auditoria (RH) —— 
 def registrar_auditoria(db: Session, user_id: int, action: str, endpoint: str, detail: str = ""):
@@ -30,23 +43,35 @@ def registrar_auditoria(db: Session, user_id: int, action: str, endpoint: str, d
     db.add(audit)
     db.commit()
 
-
-
-
 # —— User (RH) —— #
 def get_user(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
 def create_user(db: Session, user: schemas.UserCreate):
+    """
+    Cria usuário garantindo que 'cargo' nunca quebre NOT NULL.
+    - Se o schema não tiver cargo ou vier vazio, usa 'Não Definido'.
+    """
     if get_user(db, user.email):
         raise HTTPException(status_code=400, detail="E-mail já cadastrado")
+
     hashed_password = pwd_context.hash(user.password)
+
+    # Alguns schemas não possuem 'cargo'; usamos getattr para não quebrar
+    cargo_safe = normalize_cargo(getattr(user, "cargo", None))
+
     db_user = models.User(
         email=user.email,
         nome=user.nome,
         hashed_password=hashed_password,
-        role = user.role
+        role=user.role or "funcionario",
+        is_active=True,
+        failed_attempts=0,
+        locked=False,
+        locked_until=None,
+        cargo=cargo_safe,  # <- evita NOT NULL violation
     )
+
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -55,14 +80,6 @@ def create_user(db: Session, user: schemas.UserCreate):
 def update_failed_attempts(db: Session, user: models.User, reset: bool = False) -> int:
     """
     Atualiza tentativas de login falhas de um usuário.
-    
-    Args:
-        db (Session): Sessão do banco de dados
-        user (models.User): Usuário a ser atualizado
-        reset (bool): Se True, zera as tentativas e desbloqueia a conta
-
-    Returns:
-        int: Número de tentativas restantes antes do bloqueio
     """
     if reset:
         user.failed_attempts = 0
@@ -70,22 +87,22 @@ def update_failed_attempts(db: Session, user: models.User, reset: bool = False) 
         user.locked_until = None
     else:
         user.failed_attempts += 1
-
-        # Bloquear conta se atingir limite
         if user.failed_attempts >= MAX_TENTATIVAS:
             user.locked = True
             user.locked_until = datetime.utcnow() + timedelta(minutes=TEMPO_BLOQUEIO_MINUTOS)
 
     db.commit()
     db.refresh(user)
-
-    # Calcula tentativas restantes (não permitir negativo)
-    tentativas_restantes = max(0, MAX_TENTATIVAS - user.failed_attempts)
-    return tentativas_restantes
+    return max(0, MAX_TENTATIVAS - user.failed_attempts)
 
 # —— Colaborador —— #
 def create_colaborador(db: Session, colab: schemas.ColaboradorCreate):
+    """
+    Cria colaborador e, se informado cargo, sincroniza em users.cargo.
+    """
     user_id = None
+    usuario: Optional[models.User] = None
+
     if colab.email_usuario:
         usuario = db.query(models.User).filter_by(email=colab.email_usuario).first()
         if not usuario:
@@ -98,18 +115,24 @@ def create_colaborador(db: Session, colab: schemas.ColaboradorCreate):
         user_id=user_id
     )
     db.add(db_colab)
+
+    # Se vier cargo no payload de colaborador, gravamos em users.cargo (source-of-truth atual)
+    # Isso garante que a UI já enxergue o cargo após o POST /colaboradores
+    if usuario is not None and hasattr(colab, "cargo"):
+        usuario.cargo = normalize_cargo(getattr(colab, "cargo", None))
+        db.add(usuario)
+
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Código já existe")
+
     db.refresh(db_colab)
     return db_colab
 
-
 def get_colaborador_by_user_id(db: Session, user_id: int):
     return db.query(models.Colaborador).filter(models.Colaborador.user_id == user_id).first()
-
 
 def list_colaboradores(db: Session):
     return db.query(models.Colaborador).all()
@@ -166,7 +189,6 @@ def inserir_ponto_manual(
     user_id: Optional[int] = None,
     justificativa: Optional[str] = None,
 ) -> models.RegistroPonto:
-    # Tenta achar registro existente do dia
     reg = (
         db.query(models.RegistroPonto)
         .filter(models.RegistroPonto.colaborador_id == colaborador_id)
@@ -187,7 +209,6 @@ def inserir_ponto_manual(
         )
         db.add(reg)
     else:
-        # Atualiza campos informados (sem zerar os não enviados)
         if entrada is not None:
             reg.entrada = entrada
         if saida_almoco is not None:
@@ -204,8 +225,6 @@ def inserir_ponto_manual(
     db.refresh(reg)
     return reg
 
-
-
 def list_pontos(db: Session):
     return db.query(models.RegistroPonto).options(joinedload(models.RegistroPonto.colaborador)).all()
 
@@ -215,19 +234,16 @@ def update_ponto(db: Session, id: int, dados: schemas.RegistroPontoUpdate, user_
     if not ponto:
         raise HTTPException(status_code=404, detail="Registro de ponto não encontrado.")
 
-
     if ponto.justificativa:
         raise HTTPException(status_code=400, detail="Registros de justificativa não podem ser alterados.")
 
     for campo, valor in dados.dict(exclude_unset=True).items():
         setattr(ponto, campo, valor)
 
-    ponto.alterado_por_id = user_id  # ✅ seta quem alterou
+    ponto.alterado_por_id = user_id
     db.commit()
     db.refresh(ponto)
     return ponto
-
-
 
 def delete_ponto(db: Session, id: int):
     reg = db.query(models.RegistroPonto).filter_by(id=id).first()
@@ -237,7 +253,6 @@ def delete_ponto(db: Session, id: int):
     db.delete(reg)
     db.commit()
     return {"message": "Registro de ponto excluído com sucesso"}
-
 
 # —— Justificativas —— #
 def salvar_justificativa(db: Session, justificativa: schemas.JustificativaCreate) -> models.Justificativa:
@@ -257,8 +272,6 @@ def salvar_justificativa(db: Session, justificativa: schemas.JustificativaCreate
     db.refresh(nova_justificativa)
     return nova_justificativa
 
-
-
 def avaliar_justificativa(
     db: Session,
     just_id: int,
@@ -267,7 +280,7 @@ def avaliar_justificativa(
 ):
     just = db.query(models.Justificativa).filter_by(id=just_id).first()
     if not just:
-        raise HTTPException(status_code=404, detail="Justificativa não encontrada")
+        raise HTTPException(status_code=404, detail="Justificativa não encontrado")
     if just.status != "pendente":
         raise HTTPException(status_code=409, detail="Já avaliada")
 

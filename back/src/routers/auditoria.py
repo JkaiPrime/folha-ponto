@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from src.database import SessionLocal
 from src.models import AuditLog
-from src.routers.auth import apenas_rh
 
 
 router = APIRouter(prefix="/auditoria", tags=["auditoria"])
@@ -14,7 +13,7 @@ def get_db():
         yield db
     finally:
         db.close()
-
+"""
 @router.get("/", response_model=List[dict])
 def listar_auditoria(db: Session = Depends(get_db), _: dict = Depends(apenas_rh)):
     logs = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
@@ -28,3 +27,4 @@ def listar_auditoria(db: Session = Depends(get_db), _: dict = Depends(apenas_rh)
         }
         for log in logs
     ]
+"""

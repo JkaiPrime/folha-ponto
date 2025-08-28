@@ -230,7 +230,7 @@ const displayEmail = computed<string>(() =>
   */
 /*
 const displayCode = computed<string | null>(() =>
-  (auth.me?.code ?? meLocal.value.code ?? null) as string 
+  (auth.me?.code ?? meLocal.value.code ?? null) as string
 )
   */
  /*
@@ -287,8 +287,11 @@ onMounted(async () => {
 })
 
 function logout () {
-  void auth.logout()
-  void router.push('/')
+  void api.post('/auth/logout', {}, { withCredentials: true })
+    .finally(() => {
+      void auth.logout()
+      void router.push('/')
+    })
 }
 function go (path: string) {
   drawer.value = false

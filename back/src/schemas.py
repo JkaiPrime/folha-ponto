@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from datetime import date, datetime
-from typing import Optional, Union
+from typing import Optional, Union, Literal
 from enum import Enum
 import re
 
@@ -16,10 +16,14 @@ class ColaboradorResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# — Roles oficiais (3)
+Role = Literal["funcionario", "gestao", "estagiario"]
+
 class UserBase(BaseModel):
     email: EmailStr
     nome: str
-    role: str = "funcionario"
+    role: Role = "funcionario"
+    cargo: Optional[str] = None  # <- NOVO: texto livre
 
 class UserCreate(UserBase):
     password: str
@@ -34,6 +38,7 @@ class UserResponse(UserBase):
 class UsuarioUpdate(BaseModel):
     nome: Optional[str] = None
     email: Optional[EmailStr] = None
+    cargo: Optional[str] = None  # <- permitir atualizar cargo
 
 class PasswordTempRequest(BaseModel):
     nova_senha: str
@@ -61,16 +66,17 @@ class RegistroComColaboradorResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class ColaboradorCreate(ColaboradorBase):
     email_usuario: Optional[EmailStr] = None
 
 
 # — Registro de Ponto —
-# Agora aceita:
-# - int (id do colaborador),
-# - str (code de 6 dígitos),
-# - None (usa usuário logado para resolver).
 class RegistroPontoBase(BaseModel):
+    # aceita:
+    # - int (id do colaborador),
+    # - str (code de 6 dígitos),
+    # - None (usa usuário logado para resolver).
     colaborador_id: Optional[Union[int, str]] = None
 
     @model_validator(mode="after")
@@ -143,7 +149,7 @@ class RegistroPontoManualCreate(BaseModel):
         return self
 
 
-# — tokens —
+# — Tokens —
 class Token(BaseModel):
     access_token: str
     token_type: str

@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Date, DateTime, Integer, String,
-    Boolean, ForeignKey, Text, Time, UniqueConstraint, func
+    Boolean, ForeignKey, Text, func
 )
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -19,9 +19,11 @@ class User(Base):
     failed_attempts = Column(Integer, default=0)
     locked = Column(Boolean, default=False)
     locked_until = Column(Date, nullable=True)
-    role = Column(String, nullable=False)
+    role = Column(String, nullable=False)      # 'funcionario' | 'gestao' | 'estagiario'
+    cargo = Column(String, nullable=True)      # <<< NOVO: texto livre (Suporte 1 / ADM / etc.)
 
     colaborador = relationship("Colaborador", back_populates="user", uselist=False)
+
 
 class Colaborador(Base):
     __tablename__ = "colaboradores"
@@ -33,6 +35,7 @@ class Colaborador(Base):
 
     user = relationship("User", back_populates="colaborador")
     pontos = relationship("RegistroPonto", back_populates="colaborador")
+
 
 class RegistroPonto(Base):
     __tablename__ = "registro_ponto"
@@ -50,29 +53,32 @@ class RegistroPonto(Base):
 
     colaborador = relationship("Colaborador", back_populates="pontos")
     alterado_por = relationship("User", foreign_keys=[alterado_por_id])
-    @declared_attr
-    def status(self): pass
 
     @declared_attr
-    def avaliador(self): pass
+    def status(self):  # mapeado via orm no response, se necessário
+        pass
+
+    @declared_attr
+    def avaliador(self):
+        pass
 
 
 class Justificativa(Base):
     __tablename__ = "justificativas"
+
     id = Column(Integer, primary_key=True, index=True)
     colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), index=True)
     justificativa = Column(String, nullable=False)
     arquivo = Column(String, nullable=True)
     data_envio = Column(DateTime, default=datetime.utcnow)
     data_referente = Column(Date, nullable=False)
+
     colaborador = relationship("Colaborador", backref="justificativas")
     status = Column(String, default="pendente")
     avaliador_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     avaliado_em = Column(DateTime, nullable=True)
 
     avaliador = relationship("User", foreign_keys=[avaliador_id])
-
-
 
 
 class AuditLog(Base):
