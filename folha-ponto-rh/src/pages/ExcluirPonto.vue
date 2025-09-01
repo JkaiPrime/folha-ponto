@@ -75,7 +75,7 @@
           flat
           bordered
           :loading="loadingPontos"
-          :rows-per-page-options="[10, 20, 50, 0]"
+          :rows-per-page-options="[0, 20, 50, 0]"
         >
           <template #body-cell-data="props">
             <q-td :props="props" class="text-center">{{ props.row._data_fmt }}</q-td>

@@ -15,12 +15,16 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     nome = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True)
-    failed_attempts = Column(Integer, default=0)
-    locked = Column(Boolean, default=False)
+    # Garantir defaults também no servidor para consistência (evita NULL inesperado)
+    is_active = Column(Boolean, default=True, nullable=False)
+    failed_attempts = Column(Integer, default=0, nullable=False)
+    locked = Column(Boolean, default=False, nullable=False)
     locked_until = Column(Date, nullable=True)
     role = Column(String, nullable=False)      # 'funcionario' | 'gestao' | 'estagiario'
-    cargo = Column(String, nullable=True)      # <<< NOVO: texto livre (Suporte 1 / ADM / etc.)
+
+    # cargo deve NUNCA ser NULL (para não quebrar se a coluna for NOT NULL no DB)
+    # mesmo que sua migration atual esteja nullable=True, essas defaults blindam o ORM.
+    cargo = Column(String, nullable=False, default="Não Definido")
 
     colaborador = relationship("Colaborador", back_populates="user", uselist=False)
 

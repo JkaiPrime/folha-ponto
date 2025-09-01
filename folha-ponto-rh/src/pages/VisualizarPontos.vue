@@ -1,13 +1,37 @@
 <template>
   <q-page class="q-pa-md">
-    <q-card>
+    <q-card :style="{ border: `1px solid ${roleAccent}` }" class="overflow-hidden">
+
+      <!-- faixa decorativa com gradiente dinâmico -->
+      <div
+        class="role-gradient-bar"
+        :style="{
+          background: `linear-gradient(90deg, ${roleAccent} 0%, ${roleAccentSoft} 100%)`
+        }"
+      />
+
       <q-card-section class="row items-center justify-between">
-        <div class="text-h6">Visualizar pontos por colaborador</div>
+        <div class="text-h6" :style="{ color: roleAccentText }">
+          Visualizar pontos por colaborador
+        </div>
 
         <div v-if="registros.length" class="row items-center q-gutter-sm">
           <q-chip outline color="primary" text-color="primary" icon="query_builder">
             Total do mês: <strong class="q-ml-xs">{{ totalMesHHMMSS }}</strong>
           </q-chip>
+
+          <q-chip
+            outline
+            :color="roleChipProps.color"
+            :text-color="roleChipProps.text"
+            icon="badge"
+          >
+            <strong class="q-ml-xs text-capitalize">{{ selectedRole }}</strong>
+            <q-tooltip anchor="bottom middle" self="top middle">
+              Papel: {{ selectedRole }}
+            </q-tooltip>
+          </q-chip>
+
           <q-btn
             label="Exportar para Excel"
             color="secondary"
@@ -21,7 +45,7 @@
 
       <q-separator />
 
-      <!-- Filtros: lado a lado (igual à tela de excluir) -->
+      <!-- Filtros -->
       <q-card-section>
         <div class="row q-col-gutter-md">
           <div class="col-12 col-sm-6">
@@ -78,17 +102,22 @@
         </div>
       </q-card-section>
 
-      <!-- MINI CARD: saldo com jornada fixa 8h/dia (layout mais compacto) -->
+      <!-- MINI CARD -->
       <q-separator v-if="registros.length" />
       <q-card-section v-if="registros.length">
-        <q-card flat bordered class="q-pa-md">
+        <q-card
+          flat
+          bordered
+          class="q-pa-md"
+          :style="{ borderColor: roleAccent }"
+        >
           <div class="row q-col-gutter-md items-center">
             <div class="col-6 col-sm-3">
               <div class="text-caption text-grey-7">Dias úteis considerados</div>
               <div class="text-h6">{{ diasUteisConsiderados }}</div>
             </div>
             <div class="col-6 col-sm-3">
-              <div class="text-caption text-grey-7">Total esperado (8h/dia)</div>
+              <div class="text-caption text-grey-7">Total esperado ({{ esperadoDiaLabel }})</div>
               <div class="text-h6">{{ esperadoMesHHMM }}</div>
             </div>
             <div class="col-6 col-sm-3">
@@ -125,6 +154,7 @@
           :loading="loadingPontos"
           :rows-per-page-options="[10, 20, 50, 0]"
           v-model:pagination="pagination"
+          :table-header-style="{ backgroundColor: roleAccent, color: '#fff' }"
         >
           <template #loading>
             <q-inner-loading showing>
@@ -155,11 +185,31 @@
               <q-badge color="primary" outline>{{ props.row._total_fmt }}</q-badge>
             </q-td>
           </template>
+          <template #body-cell-alterado_por="props">
+            <q-td :props="props" class="text-center">
+              <q-chip
+                v-if="props.row._edited"
+                dense
+                color="amber"
+                text-color="black"
+                outline
+              >
+                {{ props.row._alterado_por_nome }}
+                <q-tooltip anchor="bottom middle" self="top middle">
+                  Editado por {{ props.row._alterado_por_nome }}
+                </q-tooltip>
+              </q-chip>
+              <span v-else>—</span>
+            </q-td>
+          </template>
 
           <template #bottom>
-            <div class="full-width row justify-end q-pa-sm">
+            <div class="full-width row justify-end q-pa-sm q-gutter-sm">
               <q-chip v-if="registros.length" color="grey-3" text-color="dark">
                 Registros: {{ registros.length }}
+              </q-chip>
+              <q-chip v-if="registros.length" color="amber-3" text-color="black" icon="history_edu">
+                Edições: {{ totalEditados }}
               </q-chip>
             </div>
           </template>
@@ -184,6 +234,7 @@ import { Notify } from 'quasar';
 import { api } from 'boot/axios';
 import * as XLSX from 'xlsx';
 import type { QTableColumn } from 'quasar';
+
 const pagination = ref({
   page: 1,
   rowsPerPage: 0, // 0 = todas as linhas
@@ -193,6 +244,7 @@ const pagination = ref({
 
 /* ========================= Tipagens ========================= */
 type IsoStr = string | null | undefined;
+type Role = 'funcionario' | 'gestao' | 'estagiario';
 
 interface RegistroApi {
   id: number;
@@ -201,6 +253,9 @@ interface RegistroApi {
   saida_almoco?: IsoStr;
   volta_almoco?: IsoStr;
   saida?: IsoStr;
+
+  // enriquecidos pelo backend (joinedload)
+  alterado_por?: { nome?: string } | null;
 }
 
 interface RegistroFront extends RegistroApi {
@@ -212,6 +267,10 @@ interface RegistroFront extends RegistroApi {
   _saida_fmt: string;     // HH:mm
   _total_fmt: string;     // HH:MM:SS
   _total_min: number;     // minutos inteiros
+
+  // campos para UI
+  _edited: boolean;
+  _alterado_por_nome: string;
 }
 
 interface Colaborador {
@@ -223,6 +282,7 @@ interface ColaboradorApi {
   id?: number | string;
   code?: number | string;
   nome?: string;
+  role?: string;
 }
 
 /* ========================= State ========================= */
@@ -235,8 +295,10 @@ const loadingColaboradores = ref(false);
 const loadingPontos = ref(false);
 const exportLoading = ref(false);
 
-/* ========================= Jornada fixa (8h) ========================= */
-const JORNADA_ALVO_MIN = 8 * 60; // 480 min
+/* ===== Jornada dinâmica ===== */
+const JORNADA_FUNC_MIN = 8 * 60 + 48; // 528
+const JORNADA_EST_MIN  = 6 * 60;      // 360
+const selectedRole = ref<Role>('funcionario'); // default
 
 /* ========================= Type Guards ========================= */
 function isRegistroApi(x: unknown): x is RegistroApi {
@@ -250,7 +312,7 @@ function isRegistroApiArray(x: unknown): x is RegistroApi[] {
 function isColaboradorApi(x: unknown): x is ColaboradorApi {
   if (!x || typeof x !== 'object') return false;
   const r = x as Record<string, unknown>;
-  return 'id' in r || 'code' in r || 'nome' in r;
+  return 'id' in r || 'code' in r || 'nome' in r || 'role' in r;
 }
 function isColaboradorApiArray(x: unknown): x is ColaboradorApi[] {
   return Array.isArray(x) && x.every(isColaboradorApi);
@@ -336,6 +398,7 @@ function calcMinDia(reg: { entrada?: IsoStr; saida?: IsoStr; saida_almoco?: IsoS
 function normalizeRegistroFromApi(r: RegistroApi): RegistroFront {
   const dLocal = parseDateOnlyLocal(r.data || null);
   const totalDiaMin = calcMinDia(r);
+  const alteradorNome = r?.alterado_por?.nome ? String(r.alterado_por.nome) : '';
 
   return {
     ...r,
@@ -346,7 +409,9 @@ function normalizeRegistroFromApi(r: RegistroApi): RegistroFront {
     _valm_fmt:    fmtHora(toBrDate(r.volta_almoco || null)) || '-',
     _saida_fmt:   fmtHora(toBrDate(r.saida || null)) || '-',
     _total_fmt:   minutesToHHMMSS(totalDiaMin),
-    _total_min:   totalDiaMin
+    _total_min:   totalDiaMin,
+    _edited:      Boolean(alteradorNome),
+    _alterado_por_nome: alteradorNome || '—'
   };
 }
 
@@ -358,7 +423,8 @@ const columns: QTableColumn<RegistroFront>[] = [
   { name: 'saida_almoco', label: 'Almoço saída',   field: (row: RegistroFront) => row._salm_fmt,  align: 'center' },
   { name: 'volta_almoco', label: 'Almoço retorno', field: (row: RegistroFront) => row._valm_fmt,  align: 'center' },
   { name: 'saida',        label: 'Saída',          field: (row: RegistroFront) => row._saida_fmt, align: 'center' },
-  { name: 'total_dia',    label: 'Total Dia',      field: (row: RegistroFront) => row._total_fmt, align: 'center' }
+  { name: 'total_dia',    label: 'Total Dia',      field: (row: RegistroFront) => row._total_fmt, align: 'center' },
+  { name: 'alterado_por', label: 'Alterado por',   field: (row: RegistroFront) => row._alterado_por_nome, align: 'center' }
 ];
 
 /* ========================= Data Loading ========================= */
@@ -384,6 +450,24 @@ async function carregarColaboradores(): Promise<void> {
   }
 }
 
+async function carregarRoleDoColaborador(id: number): Promise<void> {
+  try {
+    const res = await api.get(`/colaboradores/${id}`);
+    const r = res.data as ColaboradorApi;
+    const role = (r && typeof r.role === 'string') ? r.role : 'funcionario';
+    selectedRole.value = (['funcionario', 'gestao', 'estagiario'].includes(role) ? role : 'funcionario') as Role;
+  } catch {
+    selectedRole.value = 'funcionario'; // fallback
+  }
+}
+
+function inferirRolePelosRegistros(rows: RegistroFront[]): Role | null {
+  if (!rows.length) return null;
+  const temAlmoco = rows.some(r => (r._salm_fmt && r._salm_fmt !== '-') || (r._valm_fmt && r._valm_fmt !== '-'));
+  if (!temAlmoco) return 'estagiario';
+  return null;
+}
+
 async function buscarPontos(): Promise<void> {
   if (!colaboradorSelecionado.value || !mesSelecionado.value) return;
 
@@ -392,7 +476,10 @@ async function buscarPontos(): Promise<void> {
   const mes = Number(mesStr); // 1..12
   if (!ano || !mes) return;
 
-  // Range como strings YYYY-MM-DD (sem toISOString)
+  // 1) atualiza o role do colaborador selecionado
+  await carregarRoleDoColaborador(Number(colaboradorSelecionado.value));
+
+  // 2) range YYYY-MM-DD (sem toISOString)
   const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
   const lastDayNum = new Date(ano, mes, 0).getDate();
   const fim = `${ano}-${String(mes).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
@@ -409,6 +496,10 @@ async function buscarPontos(): Promise<void> {
       registros.value = raw
         .map((r: RegistroApi) => normalizeRegistroFromApi(r))
         .sort((a: RegistroFront, b: RegistroFront) => dateSortKey(a.data) - dateSortKey(b.data));
+
+      // fallback: se não veio role, tenta inferir (sem almoço)
+      const inf = inferirRolePelosRegistros(registros.value);
+      if (inf && selectedRole.value !== inf) selectedRole.value = inf;
     } else {
       registros.value = [];
     }
@@ -458,7 +549,16 @@ const diasUteisConsiderados = computed<number>(() => {
   return countBusinessDaysOfMonth(y, m, true);
 });
 
-const esperadoMesMin    = computed<number>(() => diasUteisConsiderados.value * JORNADA_ALVO_MIN);
+/* —— JORNADA dinâmica por role —— */
+const jornadaAlvoMin = computed<number>(() =>
+  selectedRole.value === 'estagiario' ? JORNADA_EST_MIN : JORNADA_FUNC_MIN
+);
+
+const esperadoDiaLabel = computed<string>(() =>
+  selectedRole.value === 'estagiario' ? '6h/dia' : '8h48/dia'
+);
+
+const esperadoMesMin    = computed<number>(() => diasUteisConsiderados.value * jornadaAlvoMin.value);
 const esperadoMesHHMM   = computed<string>(() => minutesToHHMM(esperadoMesMin.value));
 const esperadoMesHHMMSS = computed<string>(() => minutesToHHMMSS(esperadoMesMin.value));
 
@@ -469,6 +569,8 @@ const saldoColor   = computed<'positive' | 'negative' | 'grey'>(() =>
   saldoMesMin.value > 0 ? 'positive' : (saldoMesMin.value < 0 ? 'negative' : 'grey')
 );
 
+const totalEditados = computed<number>(() => registros.value.filter(r => r._edited).length);
+
 const limiteContagemLabel = computed<string>(() => {
   if (!mesSelecionado.value) return '';
   const [yStr, mStr] = mesSelecionado.value.split('-');
@@ -477,6 +579,40 @@ const limiteContagemLabel = computed<string>(() => {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === y && (today.getMonth() + 1) === m;
   return isCurrentMonth ? today.toLocaleDateString('pt-BR') : new Date(y, m, 0).toLocaleDateString('pt-BR');
+});
+
+/* ===== Tema dinâmico por papel ===== */
+const roleChipProps = computed(() => {
+  const map: Record<Role, { color: string; text: string }> = {
+    funcionario: { color: 'secondary',     text: 'secondary' },
+    gestao:      { color: 'deep-purple-6', text: 'white'     },
+    estagiario:  { color: 'orange-6',      text: 'orange-6'  }
+  };
+  return map[selectedRole.value] ?? map.funcionario;
+});
+
+// cores para bordas, header e gradiente (hex)
+const roleAccent = computed<string>(() => {
+  switch (selectedRole.value) {
+    case 'gestao':     return '#673ab7';  // deep-purple-6
+    case 'estagiario': return '#fb8c00';  // orange-6
+    default:           return '#26a69a';  // secondary (teal-ish)
+  }
+});
+
+// versão "soft" pro gradiente (mesma cor com mais claro)
+const roleAccentSoft = computed<string>(() => {
+  switch (selectedRole.value) {
+    case 'gestao':     return '#b39ddb';  // purple claro
+    case 'estagiario': return '#ffcc80';  // orange claro
+    default:           return '#80cbc4';  // teal claro
+  }
+});
+
+const roleAccentText = computed<string>(() => {
+  return selectedRole.value === 'gestao' ? '#4527a0'
+       : selectedRole.value === 'estagiario' ? '#e65100'
+       : '#1f7d73';
 });
 
 /* ========================= Export ========================= */
@@ -497,7 +633,7 @@ function exportarExcel(): void {
       ['DATA', 'DIA', 'Entrada', 'Almoço saída', 'Almoço retorno', 'Saída', 'Total DIA'],
       ...linhas,
       ['', '', '', '', '', 'TOTAL MÊS', totalMesHHMMSS.value],
-      ['', '', '', '', '', 'ESPERADO (8h/dia)', esperadoMesHHMMSS.value],
+      ['', '', '', '', '', `ESPERADO (${esperadoDiaLabel.value})`, esperadoMesHHMMSS.value],
       ['', '', '', '', '', 'SALDO', `${saldoPrefix.value}${saldoMesHHMM.value}:00`]
     ];
 
@@ -523,8 +659,17 @@ onMounted(async () => {
   const mm = String(hoje.getMonth() + 1).padStart(2, '0');
   mesSelecionado.value = `${yyyy}-${mm}`;
 });
+
+// atualiza o role assim que escolher um colaborador
+watch(colaboradorSelecionado, async (id) => {
+  if (id) await carregarRoleDoColaborador(Number(id));
+});
 </script>
 
 <style scoped>
-/* ajustes visuais pequenos */
+/* faixa decorativa superior */
+.role-gradient-bar {
+  height: 6px;
+  width: 100%;
+}
 </style>

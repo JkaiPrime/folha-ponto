@@ -1,12 +1,14 @@
+# src/crud.py
+from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Optional
-from sqlalchemy.orm import Session, joinedload
+
 from fastapi import HTTPException
 from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload
 
-from src.utils.timezone import get_hora_brasilia
-from . import models, schemas
+from src import models, schemas
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -18,11 +20,8 @@ CARGO_PLACEHOLDER = "Não Definido"
 
 def normalize_cargo(value: Optional[str]) -> str:
     """
-    Retorna um cargo válido para persistência:
-    - Se None, vazio ou equivalente a 'Não Definido', retorna o placeholder.
-    - Caso contrário, retorna o texto aparado.
-    Obs.: Este helper assume que users.cargo é NOT NULL. Se tornar nullable,
-    pode-se retornar None aqui quando desejado.
+    Garante que NUNCA retornará None (evita NOT NULL violation).
+    Normaliza vazio/indefinido para o placeholder 'Não Definido'.
     """
     if value is None:
         return CARGO_PLACEHOLDER
@@ -34,7 +33,7 @@ def normalize_cargo(value: Optional[str]) -> str:
 # —— Auditoria (RH) —— 
 def registrar_auditoria(db: Session, user_id: int, action: str, endpoint: str, detail: str = ""):
     from .models import AuditLog
-    audit = AuditLog(
+    audit = models.AuditLog(
         user_id=user_id,
         action=action,
         endpoint=endpoint,
@@ -49,38 +48,109 @@ def get_user(db: Session, email: str):
 
 def create_user(db: Session, user: schemas.UserCreate):
     """
-    Cria usuário garantindo que 'cargo' nunca quebre NOT NULL.
-    - Se o schema não tiver cargo ou vier vazio, usa 'Não Definido'.
+    Cria usuário respeitando o 'role' enviado e, se 'code' vier no payload,
+    cria o Colaborador VINCULADO com consistência transacional:
+      - Pré-checa duplicidade de code
+      - Se falhar ao criar o colaborador, apaga o user (evita órfão)
     """
     if get_user(db, user.email):
         raise HTTPException(status_code=400, detail="E-mail já cadastrado")
 
+    # 1) Pré-checagem de code para evitar órfão depois
+    if user.code:
+        ja_existe = db.query(models.Colaborador).filter(models.Colaborador.code == user.code).first()
+        if ja_existe:
+            raise HTTPException(status_code=409, detail="Código de colaborador já existe")
+
     hashed_password = pwd_context.hash(user.password)
 
-    # Alguns schemas não possuem 'cargo'; usamos getattr para não quebrar
-    cargo_safe = normalize_cargo(getattr(user, "cargo", None))
+    # Nunca permitir cargo=None se a coluna for NOT NULL
+    cargo_final = normalize_cargo(user.cargo)
+    # Se for estagiário e não veio cargo "de verdade", define algo mais semântico
+    if cargo_final == CARGO_PLACEHOLDER and user.role == "estagiario":
+        cargo_final = "Estagiário"
 
+    # 2) Criação do usuário
     db_user = models.User(
         email=user.email,
         nome=user.nome,
         hashed_password=hashed_password,
-        role=user.role or "funcionario",
+        role=user.role,                  # usa exatamente o papel recebido
         is_active=True,
         failed_attempts=0,
         locked=False,
         locked_until=None,
-        cargo=cargo_safe,  # <- evita NOT NULL violation
+        cargo=cargo_final,
     )
-
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+
+    # 3) Se veio code, criar o colaborador vinculado
+    if user.code:
+        db_colab = models.Colaborador(
+            code=user.code,
+            nome=db_user.nome,
+            user_id=db_user.id
+        )
+        db.add(db_colab)
+        try:
+            db.commit()
+        except IntegrityError:
+            # 3.1) Algo deu errado ao criar o colaborador -> remover o user para não ficar órfão
+            db.rollback()
+            try:
+                db.delete(db_user)
+                db.commit()
+            except Exception:
+                db.rollback()
+            raise HTTPException(status_code=409, detail="Falha ao criar colaborador (code possivelmente duplicado). Operação revertida.")
+
+        db.refresh(db_colab)
+
     return db_user
 
+def vincular_colaborador_em_user(
+    db: Session,
+    user_id: int,
+    code: str,
+    nome: Optional[str] = None,
+    cargo: Optional[str] = None
+) -> models.Colaborador:
+    """
+    Cria Colaborador e vincula a um user existente.
+    Protege contra duplicidade de code e sincroniza cargo (opcional).
+    """
+    usuario = db.query(models.User).filter(models.User.id == user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # code precisa ser único
+    existe = db.query(models.Colaborador).filter(models.Colaborador.code == code).first()
+    if existe:
+        raise HTTPException(status_code=409, detail="Código de colaborador já existe")
+
+    colab = models.Colaborador(
+        code=code,
+        nome=nome or usuario.nome,
+        user_id=user_id
+    )
+    db.add(colab)
+
+    # opcional: sincroniza cargo no user
+    if cargo is not None:
+        usuario.cargo = normalize_cargo(cargo)
+        db.add(usuario)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Falha ao vincular colaborador (code duplicado).")
+    db.refresh(colab)
+    return colab
+
 def update_failed_attempts(db: Session, user: models.User, reset: bool = False) -> int:
-    """
-    Atualiza tentativas de login falhas de um usuário.
-    """
     if reset:
         user.failed_attempts = 0
         user.locked = False
@@ -98,7 +168,7 @@ def update_failed_attempts(db: Session, user: models.User, reset: bool = False) 
 # —— Colaborador —— #
 def create_colaborador(db: Session, colab: schemas.ColaboradorCreate):
     """
-    Cria colaborador e, se informado cargo, sincroniza em users.cargo.
+    Cria colaborador e sincroniza cargo em users.cargo (se informado e user existir).
     """
     user_id = None
     usuario: Optional[models.User] = None
@@ -111,15 +181,14 @@ def create_colaborador(db: Session, colab: schemas.ColaboradorCreate):
 
     db_colab = models.Colaborador(
         code=colab.code,
-        nome=colab.nome,
+        nome=colab.nome or (usuario.nome if usuario else ""),
         user_id=user_id
     )
     db.add(db_colab)
 
-    # Se vier cargo no payload de colaborador, gravamos em users.cargo (source-of-truth atual)
-    # Isso garante que a UI já enxergue o cargo após o POST /colaboradores
-    if usuario is not None and hasattr(colab, "cargo"):
-        usuario.cargo = normalize_cargo(getattr(colab, "cargo", None))
+    # Se veio cargo -> salva em users (sempre normalizado para evitar NULL)
+    if usuario is not None and colab.cargo is not None:
+        usuario.cargo = normalize_cargo(colab.cargo)
         db.add(usuario)
 
     try:
@@ -137,8 +206,8 @@ def get_colaborador_by_user_id(db: Session, user_id: int):
 def list_colaboradores(db: Session):
     return db.query(models.Colaborador).all()
 
-def delete_colaborador(db: Session, colaborador_id: str) -> bool:
-    colaborador = db.query(models.Colaborador).filter(models.Colaborador.code == colaborador_id).first()
+def delete_colaborador(db: Session, colaborador_code: str) -> bool:
+    colaborador = db.query(models.Colaborador).filter(models.Colaborador.code == colaborador_code).first()
     if colaborador:
         db.delete(colaborador)
         db.commit()
@@ -151,6 +220,12 @@ def registrar_ponto(db: Session, colaborador_code: str, hora_brasilia: datetime)
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado")
 
+    # Descobre o papel do usuário vinculado ao colaborador
+    usuario = None
+    if colaborador.user_id:
+        usuario = db.query(models.User).filter(models.User.id == colaborador.user_id).first()
+    role = (usuario.role if usuario else "funcionario") or "funcionario"
+
     hoje = hora_brasilia.date()
 
     reg = db.query(models.RegistroPonto).filter(
@@ -158,6 +233,26 @@ def registrar_ponto(db: Session, colaborador_code: str, hora_brasilia: datetime)
         models.RegistroPonto.data == hoje
     ).first()
 
+    # Tratativa especial para estagiário: apenas entrada -> saída
+    if role == "estagiario":
+        if not reg:
+            reg = models.RegistroPonto(
+                colaborador_id=colaborador.id,
+                data=hoje,
+                entrada=hora_brasilia
+            )
+            db.add(reg)
+        else:
+            if reg.saida is None:
+                reg.saida = hora_brasilia
+            else:
+                # já registrou entrada e saída hoje
+                raise HTTPException(status_code=409, detail="Estagiário já registrou entrada e saída hoje.")
+        db.commit()
+        db.refresh(reg)
+        return reg
+
+    # Demais papéis: ciclo completo
     if not reg:
         reg = models.RegistroPonto(
             colaborador_id=colaborador.id,
@@ -172,6 +267,8 @@ def registrar_ponto(db: Session, colaborador_code: str, hora_brasilia: datetime)
             reg.volta_almoco = hora_brasilia
         elif not reg.saida:
             reg.saida = hora_brasilia
+        else:
+            raise HTTPException(status_code=409, detail="Todas as batidas já foram registradas para hoje.")
 
     db.commit()
     db.refresh(reg)
@@ -189,6 +286,22 @@ def inserir_ponto_manual(
     user_id: Optional[int] = None,
     justificativa: Optional[str] = None,
 ) -> models.RegistroPonto:
+    # Verifica papel do usuário dono do colaborador para aplicar regra de estagiário
+    colab = db.query(models.Colaborador).filter(models.Colaborador.id == colaborador_id).first()
+    if not colab:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
+
+    dono = None
+    if colab.user_id:
+        dono = db.query(models.User).filter(models.User.id == colab.user_id).first()
+    role_dono = (dono.role if dono else "funcionario") or "funcionario"
+
+    if role_dono == "estagiario":
+        # Bloqueia campos de almoço para estagiário (decisão explícita)
+        if saida_almoco is not None or volta_almoco is not None:
+            raise HTTPException(status_code=400, detail="Estagiário não registra pausa de almoço: apenas entrada e saída.")
+        # Nada a fazer aqui além de permitir apenas entrada/saída
+
     reg = (
         db.query(models.RegistroPonto)
         .filter(models.RegistroPonto.colaborador_id == colaborador_id)
@@ -201,8 +314,8 @@ def inserir_ponto_manual(
             colaborador_id=colaborador_id,
             data=data,
             entrada=entrada,
-            saida_almoco=saida_almoco,
-            volta_almoco=volta_almoco,
+            saida_almoco=saida_almoco if role_dono != "estagiario" else None,
+            volta_almoco=volta_almoco if role_dono != "estagiario" else None,
             saida=saida,
             justificativa=justificativa or None,
             alterado_por_id=user_id,
@@ -211,10 +324,11 @@ def inserir_ponto_manual(
     else:
         if entrada is not None:
             reg.entrada = entrada
-        if saida_almoco is not None:
-            reg.saida_almoco = saida_almoco
-        if volta_almoco is not None:
-            reg.volta_almoco = volta_almoco
+        if role_dono != "estagiario":
+            if saida_almoco is not None:
+                reg.saida_almoco = saida_almoco
+            if volta_almoco is not None:
+                reg.volta_almoco = volta_almoco
         if saida is not None:
             reg.saida = saida
         if justificativa is not None:
@@ -230,7 +344,6 @@ def list_pontos(db: Session):
 
 def update_ponto(db: Session, id: int, dados: schemas.RegistroPontoUpdate, user_id: int):
     ponto = db.query(models.RegistroPonto).filter(models.RegistroPonto.id == id).first()
-
     if not ponto:
         raise HTTPException(status_code=404, detail="Registro de ponto não encontrado.")
 

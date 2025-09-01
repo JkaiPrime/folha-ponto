@@ -130,7 +130,10 @@
 
             <template #body-cell-excluir="props">
               <q-td align="center">
-                <q-btn flat dense round icon="delete" color="negative" @click="excluirUsuario(props.row.id)" />
+                <q-btn
+                  flat dense round icon="delete" color="negative"
+                  @click="abrirDialogExcluir(props.row)"
+                />
               </q-td>
             </template>
 
@@ -335,9 +338,47 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- DIALOG: Excluir Usuário (com cascata) -->
+    <q-dialog v-model="dlgExcluir" persistent>
+      <q-card style="min-width: 520px; max-width: 92vw;">
+        <q-card-section class="row items-center">
+          <q-icon name="warning" color="negative" size="28px" class="q-mr-md" />
+          <div class="text-h6">Excluir usuário</div>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section>
+          <div class="q-mb-sm">
+            Tem certeza que deseja excluir o usuário
+            <b>{{ alvoExcluir?.nome }}</b>
+            (<span class="text-grey-7">{{ alvoExcluir?.email }}</span>)?
+          </div>
+          <q-banner class="bg-orange-2 text-orange-10 q-mb-md" rounded dense>
+            Esta ação é irreversível.
+          </q-banner>
+
+          <q-checkbox
+            v-model="excluirCascata"
+            color="negative"
+            :label="`Excluir também o colaborador vinculado, pontos e justificativas (em cascata)`"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancelar" v-close-popup />
+          <q-btn
+            color="negative"
+            label="Excluir"
+            :loading="loadingExcluir"
+            @click="confirmarExclusao"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
-
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
@@ -457,18 +498,43 @@ async function hidratarComColaborador () {
   }
 }
 
-/* ===== ações tabela ===== */
-async function excluirUsuario (id: number) {
-  if (!confirm('Deseja realmente excluir este usuário?')) return
+/* ===== exclusão com diálogo/cascata ===== */
+const dlgExcluir = ref(false)
+const alvoExcluir = ref<Usuario | null>(null)
+const excluirCascata = ref(true) // padrão marcado
+const loadingExcluir = ref(false)
+
+function abrirDialogExcluir (u: Usuario) {
+  alvoExcluir.value = u
+  excluirCascata.value = true
+  dlgExcluir.value = true
+}
+
+async function confirmarExclusao () {
+  if (!alvoExcluir.value) return
+  loadingExcluir.value = true
   try {
-    await api.delete(`/auth/usuarios/${id}`, { withCredentials: true })
-    Notify.create({ type: 'positive', message: 'Usuário excluído' })
+    await api.delete(`/auth/usuarios/${alvoExcluir.value.id}`, {
+      withCredentials: true,
+      params: { cascade: excluirCascata.value }
+    })
+    Notify.create({
+      type: 'positive',
+      message: excluirCascata.value
+        ? 'Usuário e dados vinculados excluídos'
+        : 'Usuário excluído'
+    })
+    dlgExcluir.value = false
+    alvoExcluir.value = null
     await carregarUsuarios()
   } catch {
     Notify.create({ type: 'negative', message: 'Erro ao excluir usuário' })
+  } finally {
+    loadingExcluir.value = false
   }
 }
 
+/* ===== outras ações ===== */
 async function desbloquearUsuario (id: number) {
   try {
     await api.post(`/auth/usuarios/${id}/desbloquear`, undefined, { withCredentials: true })
@@ -514,9 +580,9 @@ const loadingCadastro = ref(false)
 const showPwdCadastro = ref(false)
 const erroCadastro = ref<string | null>(null)
 
-const formCadastro = ref<{ code: string; nome: string; email: string; senha: string; confirmarSenha: string; role: Role; cargo: string; }>({
-  code: '', nome: '', email: '', senha: '', confirmarSenha: '', role: 'funcionario', cargo: ''
-})
+const formCadastro = ref<{ code: string; nome: string; email: string; senha: string; confirmarSenha: string; role: Role; cargo: string; }>(
+  { code: '', nome: '', email: '', senha: '', confirmarSenha: '', role: 'funcionario', cargo: '' }
+)
 
 function abrirDialogCadastro () {
   erroCadastro.value = null
@@ -643,7 +709,7 @@ async function salvarEdicoes () {
       await api.patch(`/auth/usuarios/${editUser.value.id}/papel`, fd, { withCredentials: true })
     }
 
-    // 3) Vínculo Colaborador: envia só os campos do vínculo, com trim
+    // 3) Vínculo Colaborador
     const payload = {
       code: editCode.value ? editCode.value.trim() : null,
       cargo: editCargo.value ? editCargo.value.trim() : null
@@ -651,7 +717,7 @@ async function salvarEdicoes () {
     const resp = await api.patch(`/colaboradores/by-user/${editUser.value.id}`, payload, { withCredentials: true })
     console.debug('[GERENCIAR] PATCH /colaboradores/by-user resp:', resp.data)
 
-    // 4) Atualiza a linha local imediatamente (tipado, com guarda)
+    // 4) Atualiza a linha local
     const currIdx = usuarios.value.findIndex(u => u.id === editUser.value!.id)
     if (currIdx !== -1) {
       const curr = usuarios.value[currIdx]
@@ -672,7 +738,7 @@ async function salvarEdicoes () {
     Notify.create({ type: 'positive', message: 'Alterações salvas' })
     dlgGerenciar.value = false
 
-    // 5) Recarrega + rehidrata (garante refletir também se /auth/usuarios não retornar cargo/code)
+    // 5) Recarrega + rehidrata
     await carregarUsuarios()
     await hidratarComColaborador()
   } catch (e) {

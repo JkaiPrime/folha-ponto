@@ -1,18 +1,23 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Cookie, Depends, Form, HTTPException
+
+from fastapi import (
+    APIRouter, Cookie, Depends, Form,
+    HTTPException, Request, Query
+)
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError
+import jwt
+from jwt import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from dotenv import load_dotenv
+
 from src import models, crud, schemas
 from src.database import SessionLocal
 from src.utils.rate_limiter import limiter
-from fastapi import Request
+from pydantic import BaseModel, EmailStr  # pode remover se não usar diretamente
 
 load_dotenv()
 
@@ -29,6 +34,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+# ========================= Helpers / Dependencies =========================
 def get_db():
     db = SessionLocal()
     try:
@@ -37,7 +43,67 @@ def get_db():
         db.close()
 
 
-def authenticate_user(db: Session, email: str, password: str):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verifica_token_acesso(token: str = Depends(oauth2_scheme)) -> str:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Token inválido ou ausente")
+        return email
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido ou ausente")
+
+
+def get_current_user(
+    db: Session = Depends(get_db),
+    access_token: Optional[str] = Cookie(None)
+) -> models.User:
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Token ausente")
+    try:
+        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Token inválido")
+        user = crud.get_user(db, email)
+        if not user:
+            raise HTTPException(status_code=401, detail="Usuário não encontrado")
+        return user
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
+
+
+def get_current_user_optional(
+    db: Session = Depends(get_db),
+    access_token: Optional[str] = Cookie(None)
+) -> Optional[models.User]:
+    """
+    Igual ao get_current_user, mas NÃO levanta 401 se não houver cookie/token inválido.
+    Útil para rotas como /auth/signup (primeiro usuário).
+    """
+    if not access_token:
+        return None
+    try:
+        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            return None
+        user = crud.get_user(db, email)
+        return user
+    except InvalidTokenError:
+        return None
+
+
+def authenticate_user(db: Session, email: str, password: str) -> models.User:
     user = crud.get_user(db, email)
     if not user:
         raise HTTPException(status_code=402, detail="Credenciais inválidas")
@@ -58,26 +124,6 @@ def authenticate_user(db: Session, email: str, password: str):
     return user
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def verifica_token_acesso(token: str = Depends(oauth2_scheme)):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=401, detail="Token inválido ou ausente")
-        return email
-    except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expirado")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido ou ausente")
-
-
 def create_password_reset_token(email: str) -> str:
     expire = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
     payload = {"sub": email, "action": "pwd_reset", "exp": expire}
@@ -93,53 +139,28 @@ def set_user_password(db: Session, user: models.User, new_password: str) -> None
     db.refresh(user)
 
 
-def get_current_user(
-    db: Session = Depends(get_db),
-    access_token: str = Cookie(None)
-):
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Token ausente")
-    try:
-        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
-        if not email:
-            raise HTTPException(status_code=401, detail="Token inválido")
-        user = crud.get_user(db, email)
-        if not user:
-            raise HTTPException(status_code=401, detail="Usuário não encontrado")
-        return user
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
-
-
-def verifica_token_condicional(
-    db: Session = Depends(get_db),
-    usuario: dict = Depends(verifica_token_acesso)
-):
-    # Se já existe algum usuário no banco, exigir token
-    if db.query(models.User).first():
-        return usuario
-    # Caso contrário, permitir seguir sem token
-    return None
-
-
-def apenas_funcionario(user: models.User = Depends(get_current_user)):
-    # funcionário OU estagiário
-    if user.role not in ["funcionario", "estagiario"]:
-        raise HTTPException(status_code=403, detail="Acesso permitido apenas para funcionários/estagiários")
+def apenas_funcionario(user: models.User = Depends(get_current_user)) -> models.User:
+    if user.role != "funcionario":
+        raise HTTPException(status_code=403, detail="Acesso permitido apenas para funcionários")
     return user
 
 
-def apenas_gestao(user: models.User = Depends(get_current_user)):
-    # somente gestão cria/edita usuários
-    if user.role != "gestao":
+def apenas_gestao(user: models.User = Depends(get_current_user)) -> models.User:
+    if user.role not in ["gestao", "admin", "rh"]:
         raise HTTPException(
             status_code=403,
-            detail="Acesso permitido apenas para usuários de gestão"
+            detail="Acesso permitido apenas para usuários de gestão / RH / admin"
         )
     return user
 
 
+def apenas_rh(user: models.User = Depends(get_current_user)) -> models.User:
+    if user.role != "rh":
+        raise HTTPException(status_code=403, detail="Acesso restrito ao RH")
+    return user
+
+
+# ================================ Rotas ===================================
 @limiter.limit("14/minute")
 @router.post("/login")
 def login(
@@ -213,7 +234,7 @@ def refresh_token(request: Request, req: schemas.RefreshTokenRequest):
 
     except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expirado")
-    except JWTError:
+    except InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
@@ -223,10 +244,10 @@ def signup(
     user: schemas.UserCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: Optional[models.User] = Depends(get_current_user)
+    current_user: Optional[models.User] = Depends(get_current_user_optional),
 ):
-    # Permitir cadastro do primeiro usuário sem autenticação
-    if db.query(models.User).count() == 0:
+    total = db.query(models.User).count()
+    if total == 0:
         db_user = crud.create_user(db, user)
         crud.registrar_auditoria(
             db,
@@ -237,8 +258,7 @@ def signup(
         )
         return db_user
 
-    # Após o primeiro, somente gestão pode criar
-    if not current_user or current_user.role != "gestao":
+    if not current_user or current_user.role not in ("gestao", "admin", "rh"):
         raise HTTPException(status_code=403, detail="Permissão negada para criar usuários.")
 
     db_user = crud.create_user(db, user)
@@ -264,33 +284,20 @@ def atualizar_usuario(
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     data = payload.model_dump(exclude_unset=True)
+
     if "email" in data and data["email"] != user.email:
-        # evita e-mail duplicado
         existe = db.query(models.User).filter(models.User.email == data["email"]).first()
         if existe:
             raise HTTPException(status_code=409, detail="Email já está em uso")
 
-    # atualiza campos permitidos (nome, email, cargo)
     for k, v in data.items():
         setattr(user, k, v)
 
     db.commit()
     db.refresh(user)
-    crud.registrar_auditoria(
-        db, user.id,
-        action="atualizar_usuario",
-        endpoint=f"/auth/usuarios/{id}",
-        detail=str(data)
-    )
-    return {
-        "id": user.id,
-        "nome": user.nome,
-        "email": user.email,
-        "role": user.role,
-        "locked": user.locked,
-        "is_active": user.is_active,
-        "cargo": user.cargo
-    }
+    crud.registrar_auditoria(db, user.id, action="atualizar_usuario",
+                             endpoint=f"/auth/usuarios/{id}", detail=str(data))
+    return {"id": user.id, "nome": user.nome, "email": user.email, "role": user.role, "locked": user.locked}
 
 
 @router.post("/usuarios/{id}/password-temporaria")
@@ -305,12 +312,8 @@ def definir_senha_temporaria(
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     set_user_password(db, user, req.nova_senha)
-    crud.registrar_auditoria(
-        db, gestor.id,
-        action="definir_senha_temporaria",
-        endpoint=f"/auth/usuarios/{id}/password-temporaria",
-        detail=""
-    )
+    crud.registrar_auditoria(db, gestor.id, action="definir_senha_temporaria",
+                             endpoint=f"/auth/usuarios/{id}/password-temporaria", detail="")
     return {"ok": True}
 
 
@@ -327,12 +330,8 @@ def gerar_reset_link(
     token = create_password_reset_token(user.email)
     reset_url = f"{FRONTEND_URL}/reset-password?token={token}"
 
-    crud.registrar_auditoria(
-        db, gestor.id,
-        action="gerar_reset_link",
-        endpoint=f"/auth/usuarios/{id}/reset-link",
-        detail=f"email={user.email}"
-    )
+    crud.registrar_auditoria(db, gestor.id, action="gerar_reset_link",
+                             endpoint=f"/auth/usuarios/{id}/reset-link", detail=f"email={user.email}")
     return {"reset_url": reset_url}
 
 
@@ -350,7 +349,7 @@ def resetar_senha(
             raise HTTPException(status_code=400, detail="Token sem usuário")
     except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token de reset expirado")
-    except JWTError:
+    except InvalidTokenError:
         raise HTTPException(status_code=400, detail="Token inválido")
 
     user = crud.get_user(db, email)
@@ -358,12 +357,8 @@ def resetar_senha(
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     set_user_password(db, user, req.nova_senha)
-    crud.registrar_auditoria(
-        db, user.id,
-        action="resetar_senha",
-        endpoint="/auth/password/reset",
-        detail="via token"
-    )
+    crud.registrar_auditoria(db, user.id, action="resetar_senha",
+                             endpoint="/auth/password/reset", detail="via token")
     return {"ok": True}
 
 
@@ -372,7 +367,6 @@ def listar_usuarios(
     db: Session = Depends(get_db),
     _: schemas.UserResponse = Depends(get_current_user)
 ):
-    # retorna users incluindo 'cargo'
     return db.query(models.User).all()
 
 
@@ -387,8 +381,7 @@ def atualizar_papel_usuario(
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    ROLES_ACEITOS = {"funcionario", "gestao", "estagiario"}  # <<< atualizado
-    if role not in ROLES_ACEITOS:
+    if role not in ["funcionario", "gestao", "estagiario"]:
         raise HTTPException(status_code=400, detail="Papel inválido")
 
     user.role = role
@@ -403,7 +396,7 @@ def desbloquear_usuario(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.role != "gestao":
+    if current_user.role not in ("gestao", "admin", "rh"):
         raise HTTPException(status_code=403, detail="Permissão negada.")
 
     usuario = db.query(models.User).filter(models.User.id == user_id).first()
@@ -419,14 +412,43 @@ def desbloquear_usuario(
 
 
 @router.delete("/usuarios/{id}")
-def deletar_usuario(id: int, db: Session = Depends(get_db)):
+def deletar_usuario(
+    id: int,
+    cascade: bool = Query(False, description="Se true, remove também colaborador, pontos e justificativas"),
+    db: Session = Depends(get_db),
+    _: models.User = Depends(apenas_gestao)
+):
     usuario = db.query(models.User).filter(models.User.id == id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    db.delete(usuario)
-    db.commit()
-    return {"message": "Usuário excluído com sucesso"}
+    colab = db.query(models.Colaborador).filter(models.Colaborador.user_id == id).first()
+
+    try:
+        if colab:
+            if cascade:
+                db.query(models.RegistroPonto).filter(
+                    models.RegistroPonto.colaborador_id == colab.id
+                ).delete(synchronize_session=False)
+
+                db.query(models.Justificativa).filter(
+                    models.Justificativa.colaborador_id == colab.id
+                ).delete(synchronize_session=False)
+
+                db.delete(colab)
+            else:
+                colab.user_id = None
+                db.add(colab)
+
+        db.delete(usuario)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "message": "Usuário excluído com sucesso" + (" (em cascata)" if cascade else " (acesso removido, colaborador preservado)")
+    }
 
 
 @router.put("/alterar-senha")
@@ -448,6 +470,6 @@ def alterar_senha(
 @router.post("/logout")
 def logout():
     response = JSONResponse(content={"message": "Logout realizado com sucesso"})
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
     return response
